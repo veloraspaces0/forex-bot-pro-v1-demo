@@ -248,7 +248,25 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
 }
 export async function readPublic(now=Date.now(), fetcher=fetch, token=null) {
   const results = await Promise.allSettled([
-    getJson(ENDPOINT+"/contents/v2/state.json?ref=main",fetcher,undefined,token),
+    // Public raw-content fallback avoids the GitHub REST API's stricter
+    // unauthenticated rate limit. It is read-only and never uses credentials.
+    (async()=>{
+      try {
+        return await getJson(ENDPOINT+"/contents/v2/state.json?ref=main",fetcher,undefined,token);
+      } catch(error) {
+        if(!/^GITHUB_STATE_HTTP_(403|429)/.test(String(error?.message||""))) throw error;
+        const rawUrl="https://raw.githubusercontent.com/"+GITHUB_REPO+"/main/v2/state.json";
+        const response=await fetcher(rawUrl,{headers:{"Accept":"application/json",
+          "User-Agent":"Forex-Watch-V2.3.2"},cache:"no-store",redirect:"error"});
+        if(!response.ok) throw error; // retain the original diagnostic
+        const body=await response.text();
+        if(body.length>MAX_API_BYTES) throw new Error("GITHUB_STATE_RESPONSE_TOO_LARGE");
+        let parsed;
+        try { parsed=JSON.parse(body); } catch { throw new Error("GITHUB_STATE_INVALID_JSON"); }
+        return {encoding:"base64",content:btoa(String.fromCharCode(
+          ...new TextEncoder().encode(JSON.stringify(parsed))))};
+      }
+    })(),
     getJson(ENDPOINT+"/actions/workflows/"+MONITOR_WORKFLOW+"/runs?branch=main&per_page=20",fetcher,undefined,token),
   ]);
   const failed=results.find(x=>x.status==="rejected");
