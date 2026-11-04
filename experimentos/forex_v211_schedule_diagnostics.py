@@ -86,6 +86,14 @@ def diagnose(runs, state, now):
         if r.get("conclusion") in ("failure", "cancelled", "timed_out", "action_required", "startup_failure"):
             report["anomalies"].append({"type": "workflow_failure", "run": r["html_url"],
                                         "conclusion": r["conclusion"]})
+    successful = [r for r in scheduled if r.get("conclusion") == "success"]
+    if scheduled and not successful:
+        report["anomalies"].append({"type": "no_successful_scheduled_runs"})
+    if successful:
+        success_age = valid_age(now, successful[0]["created_at"], report, "last_success")
+        report["last_success_age_minutes"] = success_age
+        if success_age is not None and success_age > 30:
+            report["anomalies"].append({"type": "last_success_stale", "minutes": success_age})
     if scheduled:
         age = valid_age(now, scheduled[0]["created_at"], report, "last_run")
         report["last_run_age_minutes"] = age
