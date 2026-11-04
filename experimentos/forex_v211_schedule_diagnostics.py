@@ -155,6 +155,11 @@ def diagnose(runs, state, now):
         seconds_after_slot = ((stamp.minute - 7) % 15) * 60 + stamp.second + stamp.microsecond / 1_000_000
         report["schedule_dispatch_offsets_minutes"].append(round(seconds_after_slot / 60, 2))
     report["max_dispatch_offset_minutes"] = max(report["schedule_dispatch_offsets_minutes"], default=None)
+    report["recent_dispatch_offsets_minutes"] = [
+        offset for r, offset in zip(scheduled, report["schedule_dispatch_offsets_minutes"])
+        if recent_cutoff <= parse_time(r["created_at"]) <= now + dt.timedelta(minutes=2)
+    ]
+    report["max_recent_dispatch_offset_minutes"] = max(report["recent_dispatch_offsets_minutes"], default=None)
     for a, b in zip(scheduled, scheduled[1:]):
         gap = round((parse_time(a["created_at"]) - parse_time(b["created_at"])).total_seconds()/60, 2)
         report["intervals_minutes"].append(gap)
@@ -211,15 +216,16 @@ def diagnose(runs, state, now):
         report["last_success_age_minutes"] = success_age
         if success_age is not None and success_age > 30:
             report["anomalies"].append({"type": "last_success_stale", "minutes": success_age})
-    if scheduled:
-        age = valid_age(now, scheduled[0]["created_at"], report, "last_run")
+    valid_scheduled = [r for r in scheduled if parse_time(r["created_at"]) <= now + dt.timedelta(minutes=2)]
+    if valid_scheduled:
+        age = valid_age(now, valid_scheduled[0]["created_at"], report, "last_run")
         report["last_run_age_minutes"] = age
         if age is not None and age > 30:
             report["anomalies"].append({"type": "run_late", "minutes": round(age, 2)})
         if age is not None and age > 75:
             report["anomalies"].append({"type": "run_missing", "minutes": round(age, 2)})
     else:
-        report["anomalies"].append({"type": "no_scheduled_runs_in_response"})
+        report["anomalies"].append({"type": "no_valid_scheduled_runs" if scheduled else "no_scheduled_runs_in_response"})
     if type(state.get("open_position")) is not bool:
         report["anomalies"].append({"type": "invalid_open_position_flag"})
         report["anomalies"].append({"type": "position_state_unknown"})
