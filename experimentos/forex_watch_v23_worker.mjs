@@ -318,9 +318,12 @@ export async function scheduledCheck(env,now=Date.now(),fetcher=fetch) {
     console.error("WATCH_CYCLE_FAILED",String(error?.message||"Unknown error").slice(0,160));
   }
   try {
-    const ping=await signalHeartbeat(env,!failure,fetcher);
-    if(!ping.sent && env.ALERT_MODE==="active")
-      throw new Error("HEARTBEAT_NOT_CONFIGURED");
+    // OBSERVE is intentionally NOT operational monitoring. Do not ping the
+    // independent dead-man switch when Telegram alerts are disabled.
+    if (env.ALERT_MODE==="active") {
+      const ping=await signalHeartbeat(env,!failure,fetcher);
+      if(!ping.sent) throw new Error("HEARTBEAT_NOT_CONFIGURED");
+    }
   } catch(error) {
     if(!failure) failure=error;
     console.error("HEARTBEAT_DELIVERY_FAILED",String(error?.message||"Unknown error").slice(0,100));
