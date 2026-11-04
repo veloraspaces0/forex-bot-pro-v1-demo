@@ -1,7 +1,7 @@
 import datetime as dt
 import unittest
 from unittest.mock import patch
-from experimentos.forex_v211_schedule_diagnostics import diagnose, fetch_workflow_runs
+from experimentos.forex_v211_schedule_diagnostics import diagnose, fetch_workflow_runs, forex_market_open
 
 UTC = dt.timezone.utc
 NOW = dt.datetime(2026, 11, 4, 21, 20, tzinfo=UTC)
@@ -301,6 +301,26 @@ class ScheduleDiagnosticTests(unittest.TestCase):
     def test_boolean_pagination_limit_rejected(self):
         with self.assertRaises(ValueError):
             fetch_workflow_runs("https://api.github.com/repos/example/repo", max_pages=True)
+
+
+    def test_weekend_candle_staleness_is_informational(self):
+        now = dt.datetime(2026, 11, 7, 18, tzinfo=UTC)
+        s = state(5)
+        s["last_candle_at"] = (now - dt.timedelta(hours=20)).isoformat()
+        result = diagnose([run(5)], s, now)
+        self.assertNotIn("candle_stale", {a["type"] for a in result["anomalies"]})
+        self.assertGreater(result["market_closed_candle_age_minutes"], 45)
+
+    def test_weekday_candle_staleness_is_alert(self):
+        s = state(5)
+        s["last_candle_at"] = (NOW - dt.timedelta(hours=2)).isoformat()
+        result = diagnose([run(5)], s, NOW)
+        self.assertIn("candle_stale", {a["type"] for a in result["anomalies"]})
+
+    def test_forex_session_boundaries(self):
+        self.assertFalse(forex_market_open(dt.datetime(2026, 11, 7, 12, tzinfo=UTC)))
+        self.assertTrue(forex_market_open(dt.datetime(2026, 11, 8, 22, tzinfo=UTC)))
+        self.assertFalse(forex_market_open(dt.datetime(2026, 11, 6, 22, tzinfo=UTC)))
 
 if __name__ == "__main__":
     unittest.main()
