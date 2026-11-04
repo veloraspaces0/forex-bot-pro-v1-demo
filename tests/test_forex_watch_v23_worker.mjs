@@ -578,3 +578,33 @@ test("self-inconsistent public state must NEVER poison trusted continuity baseli
   await assessContinuity(repaired,env,repairedAt);
   assert.ok(!codes(repaired).includes("HISTORY_REGRESSION_SUSPECTED"));
 });
+
+test("malformed public closed_results must be a history alarm, not unreadable state",()=>{
+  for(const corrupted of [null,[null],["invalid"],[{pnl:"not-a-number"}]]) {
+    const output=assess(state(4,20,false,NOW,{closed_results:corrupted}),runs(),NOW);
+    assert.equal(output.status,"CRITICO");
+    assert.ok(codes(output).includes("PUBLIC_HISTORY_INCONSISTENT"));
+  }
+});
+test("fresh updated_at cannot hide missing PAPER last_checked_at",()=>{
+  const output=assess(state(4,20,false,NOW,{last_checked_at:null}),runs(),NOW);
+  assert.equal(output.status,"CRITICO");
+  assert.ok(codes(output).includes("LAST_CHECK_MISSING"));
+});
+test("recovery KV deletion failure is visible even when Telegram accepted recovery",async()=>{
+  const store=memoryKV();
+  const env=activeEnv({
+    get:store.get,put:store.put,
+    delete:async()=>{throw Error("KV delete unavailable")}
+  });
+  const first={status:"CRITICO",issues:[{severity:"CRITICO",code:"DATA_GAP",message:"gap"}],
+    checkedAt:stamp(4),openPosition:true};
+  assert.equal((await deliver(first,env,NOW,telegramOk)).notified,true);
+  const healthy1={status:"OK",issues:[],checkedAt:stamp(-29)};
+  const healthy2={status:"OK",issues:[],checkedAt:stamp(-44)};
+  assert.equal((await deliver(healthy1,env,NOW+30*60000,telegramOk)).notified,false);
+  const result=await deliver(healthy2,env,NOW+45*60000,telegramOk);
+  assert.equal(result.recovery,true);
+  assert.equal(result.storeDegraded,true);
+  assert.ok(store.records.has("forex-watch-v23-incident"));
+});
