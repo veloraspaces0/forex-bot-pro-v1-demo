@@ -1,0 +1,660 @@
+FOREX BOT PRO V2.1 CONSOLIDADA — REAUDITORIA DEEPSEEK
+PARTE 4/5: DASHBOARD COMPLETO, V1 E CÓDIGO LEGADO
+Fonte: https://github.com/veloraspaces0/forex-bot-pro-v1-demo/tree/auditoria-v2-1-consolidada-2026-11-04
+V1 e v2/engine.py não operam a estratégia prospectiva da V2.1.
+
+
+=============== INÍCIO index.html ===============
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="0;url=./v2/">
+<title>Forex Bot Pro V2</title>
+<script>location.replace("./v2/");</script>
+</head>
+<body>
+<p>Redirecionando para o <a href="./v2/">Forex Bot Pro V2</a>.</p>
+<p>O <a href="./v1.html">simulador V1</a> continua disponível.</p>
+</body>
+</html>
+
+=============== FIM index.html ===============
+
+
+=============== INÍCIO v2/index.html ===============
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b1220">
+<title>Forex Bot Pro V2.1 · Paper EUR/USD</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;background:#0b1220;color:#edf2ff}
+*{box-sizing:border-box}body{margin:0}main{max-width:1090px;margin:auto;padding:22px}
+a{color:#a3c2ff;text-decoration:none}a:hover{text-decoration:underline}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:17px}
+h1{font-size:clamp(25px,5vw,32px);margin:0;letter-spacing:-.7px}
+h2{font-size:16px;margin:0 0 13px}p{line-height:1.6}.muted{color:#a4b3cd}.sub{font-size:13px;margin-top:5px}
+.status{border:1px solid #5b5134;color:#f6d68a;background:#392f24;border-radius:30px;padding:9px 12px;font-weight:750;font-size:12px}
+.status.ok{border-color:#265a4a;background:#17362d;color:#83eac2}.status.err{border-color:#713e4b;background:#3c252e;color:#ffacb2}
+.button{display:inline-block;padding:10px 12px;border-radius:10px;background:#365ded;border:0;color:white;font-weight:750;cursor:pointer;font-size:13px}
+.button:hover{filter:brightness(1.12);text-decoration:none}
+.notice,.panel,.tile{border:1px solid #2b3b54;background:#142035;border-radius:16px}
+.notice{padding:15px 17px;margin-bottom:15px;font-size:13px;line-height:1.6}
+.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+.tile{padding:17px;min-width:0}.tile small{color:#a4b5cd;display:block;font-size:12px;margin-bottom:9px}
+.num{font-size:clamp(21px,2.7vw,28px);font-weight:760;letter-spacing:-.5px;white-space:nowrap}
+.pos{color:#78e5b4}.neg{color:#ff929a}
+.grid{display:grid;grid-template-columns:minmax(0,1.8fr) minmax(230px,1fr);gap:12px;margin-top:12px}
+.panel{padding:18px;min-width:0;margin-top:12px}.grid>.panel{margin-top:0}
+canvas{display:block;width:100%;height:260px;border-radius:8px;background:#0e192a}
+.kv{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #2d3b50;padding:10px 0;font-size:13px}
+.kv span{color:#a5b3cc}.kv b{text-align:right}
+.item{border-top:1px solid #2d3b50;padding:11px 0;display:flex;justify-content:space-between;align-items:center;gap:15px;font-size:13px}
+.item small{display:block;color:#9cabc5;margin-top:4px}
+.empty{color:#9cabbe;padding:16px 0;font-size:13px}
+.links{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+footer{font-size:12px;color:#a1b0c8;line-height:1.7;margin:19px 0}
+@media(max-width:760px){main{padding:12px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}.num{font-size:23px}canvas{height:215px}}
+@media(max-width:330px){.cards{grid-template-columns:1fr}}
+</style></head><body><main>
+<header>
+<div><h1>Forex Bot Pro <span style="color:#98b6ff">V2.1</span></h1>
+<div class="muted sub">EUR/USD · 15 minutos · Dados de mercado · Operações simuladas</div></div>
+<div style="display:flex;align-items:center;gap:9px"><span class="status" id="status">AGUARDANDO</span><button class="button" id="refresh" type="button">Atualizar</button></div>
+</header>
+<div class="notice"><b>Paper trading:</b> capital fictício de US$ 100. Sem conexão com corretora ou ordens reais. As cotações são lidas no servidor somente depois de configurar a API. O painel público mostra exclusivamente desempenho derivado, não o histórico bruto de preços.<div id="message" style="margin-top:8px;color:#f4d08b">Aguardando conexão com dados reais.</div></div>
+<div class="cards">
+ <section class="tile"><small>Saldo realizado</small><div class="num" id="balance">US$ 100,00</div></section>
+ <section class="tile"><small>Patrimônio estimado</small><div class="num" id="equity">US$ 100,00</div></section>
+ <section class="tile"><small>Lucro / perda</small><div class="num" id="pnl">US$ 0,00</div></section>
+ <section class="tile"><small>Trades / acerto</small><div class="num" id="winrate">0 / 0%</div></section>
+</div>
+<div class="grid">
+<section class="panel"><h2>Evolução do saldo simulado</h2><canvas id="curve" aria-label="Gráfico de saldo realizado"></canvas><p id="curveInfo" class="muted sub">Aguardando operações encerradas para desenhar a curva de resultados.</p></section>
+<aside class="panel"><h2>Proteção do capital</h2>
+ <div class="kv"><span>Capital inicial</span><b>US$ 100</b></div>
+ <div class="kv"><span>Risco planejado por entrada</span><b>0,5% (não garantido)</b></div>
+ <div class="kv"><span>Bloqueio diário</span><b>2%</b></div>
+ <div class="kv"><span>Alavancagem simulada</span><b>Até 20x</b></div>
+ <div class="kv"><span>Spread hipotético</span><b>1,2 pip</b></div>
+ <div class="kv"><span>Posição aberta</span><b id="position">Não</b></div>
+ <div class="kv"><span>Drawdown realizado máx.</span><b id="dd">0%</b></div>
+ <div class="kv"><span>Perdas acima do risco planejado</span><b id="riskViolations">0</b></div>
+ <div class="kv"><span>Bloqueio por lacuna de dados</span><b id="gapHalt">Não</b></div>
+ <div class="kv"><span>Última vela fechada (UTC)</span><b id="candle">—</b></div>
+ <div class="kv"><span>Última execução (UTC)</span><b id="updated">—</b></div>
+</aside></div>
+<section class="panel"><h2>Operações encerradas</h2><div id="trades" class="empty">Nenhuma operação registrada.</div></section>
+<section class="panel"><h2>Eventos e status</h2><div id="events" class="empty">Aguardando o primeiro ciclo.</div></section>
+<section class="panel"><h2>Configuração inicial (uma única vez)</h2>
+<p class="muted" style="font-size:13px;margin-top:0">Crie uma chave gratuita na Twelve Data e cadastre-a como secret do repositório GitHub. Não compartilhe a chave por mensagem nem a publique em arquivos.</p>
+<div class="links">
+<a class="button" href="https://twelvedata.com/" target="_blank" rel="noopener">Criar chave Twelve Data</a>
+<a class="button" href="https://github.com/veloraspaces0/forex-bot-pro-v1-demo/settings/secrets/actions" target="_blank" rel="noopener">Configurar no GitHub</a>
+<a class="button" href="https://github.com/veloraspaces0/forex-bot-pro-v1-demo/actions/workflows/forex-v2.yml" target="_blank" rel="noopener">Ver execuções</a>
+</div>
+<p class="muted sub">Nome do secret: <b>TWELVE_DATA_API_KEY</b>. O GitHub tenta rodar a cada 15 minutos, mas atrasos ou falhas são possíveis. Primeira execução inicializa os indicadores sem criar trades passados.</p></section>
+<footer>Fonte de dados: Twelve Data. Estratégia experimental EMA 9/21 + RSI 14 e SL/TP com ATR. Execuções e spreads são estimados; gaps, latência, falta de liquidez, slippage e custos reais podem alterar muito o desempenho. Não é conselho de investimento. O painel público contém apenas métricas derivadas. Recuperações após falhas de dados podem deixar intervalos sem trades simulados; ver eventos de recuperação. <a href="../v1.html">Abrir V1 com preços artificiais</a>.</footer>
+</main>
+<script>
+"use strict";
+const el=id=>document.getElementById(id);
+const money=n=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'USD'}).format(Number(n)||0);
+const dateTxt=s=>s?String(s).replace('T',' ').replace('Z','').slice(0,16):'—';
+let curve=[];
+function line(target,text,kind){let e=document.createElement('div');e.className='item';let left=document.createElement('div');left.textContent=text;let right=document.createElement('strong');right.textContent=kind;e.append(left,right);target.appendChild(e);}
+function draw(){
+ let can=el('curve'),box=can.getBoundingClientRect();let ratio=Math.min(devicePixelRatio||1,2),width=Math.max(320,Math.round(box.width)),height=Math.round(box.height||260);
+ can.width=width*ratio;can.height=height*ratio;let c=can.getContext('2d');c.scale(ratio,ratio);
+ c.fillStyle='#0e192a';c.fillRect(0,0,width,height);
+ let vals=curve.map(x=>Number(x.balance)).filter(Number.isFinite);
+ if(!vals.length)vals=[100];
+ let min=Math.min(...vals),max=Math.max(...vals);let pad=Math.max(1,(max-min)*.22);min-=pad;max+=pad;
+ let X=i=>28+(width-48)*i/Math.max(1,vals.length-1),Y=v=>18+(height-48)*(max-v)/(max-min);
+ c.strokeStyle='#28384f';c.lineWidth=1;
+ for(let i=0;i<4;i++){let y=18+(height-48)*i/3;c.beginPath();c.moveTo(25,y);c.lineTo(width-14,y);c.stroke();c.fillStyle='#8ba0c0';c.font='11px sans-serif';c.fillText((max-(max-min)*i/3).toFixed(2),4,y-5);}
+ c.strokeStyle='#72dcb0';c.lineWidth=2.5;c.beginPath();
+ vals.forEach((v,i)=>{if(i===0)c.moveTo(X(i),Y(v));else c.lineTo(X(i),Y(v));});c.stroke();
+ if(vals.length===1){c.fillStyle='#72dcb0';c.beginPath();c.arc(X(0),Y(vals[0]),4,0,Math.PI*2);c.fill();}
+}
+function statusLabel(v,updated){
+ let stale=updated&&Date.now()-Date.parse(updated)>45*60*1000;
+ if(v==='monitoring'&&stale)return ['ATRASADO','err'];
+ let labels={monitoring:['MONITORANDO','ok'],awaiting_api_key:['AGUARDANDO API',''],
+ market_closed_or_stale:['MERCADO INATIVO',''],api_error:['ERRO DA API','err'],data_gap:['PAUSADO · DADOS','err'],recovery_paused:['RECUPERADO · AGUARDANDO','']};
+ return labels[v]||['VERIFICANDO',''];
+}
+function render(data){
+ const badge=statusLabel(data.status,data.updated_at);
+ el('status').textContent=badge[0];el('status').className='status '+badge[1];
+ el('message').textContent=data.message||'Sem dados disponíveis.';
+ el('balance').textContent=money(data.balance);
+ el('equity').textContent=money(data.estimated_equity);
+ el('pnl').textContent=(data.pnl_total>0?'+':'')+money(data.pnl_total);
+ el('pnl').className='num '+(data.pnl_total>0?'pos':data.pnl_total<0?'neg':'');
+ el('winrate').textContent=(data.closed_trades||0)+' / '+(data.win_rate_pct||0).toLocaleString('pt-BR')+'%';
+ el('position').textContent=data.open_position?(data.position_side||'Sim'):'Não';
+ el('dd').textContent=Number(data.max_closed_drawdown_pct||0).toLocaleString('pt-BR')+'%';
+ el('riskViolations').textContent=String(data.risk_violations||0);
+ el('riskViolations').className=Number(data.risk_violations||0)>0?'neg':'';
+ el('gapHalt').textContent=data.gap_halt?'SIM · REVISÃO NECESSÁRIA':'Não';
+ el('gapHalt').className=data.gap_halt?'neg':'';
+ el('candle').textContent=dateTxt(data.last_candle_at);
+ el('updated').textContent=dateTxt(data.last_checked_at);
+ curve=data.equity_curve||[];draw();
+ el('curveInfo').textContent=(data.closed_trades||0)+' operações fechadas · Curva do saldo realizado, não do câmbio EUR/USD.';
+ const trades=el('trades');trades.replaceChildren();
+ if(!data.closed_results?.length)trades.textContent='Nenhuma operação encerrada.';
+ else data.closed_results.forEach(t=>{const warning=t.risk_exceeded===true?' · ⚠ RISCO EXCEDIDO':'';const budget=t.planned_risk_usd==null?'':' · risco planejado '+money(t.planned_risk_usd);line(trades,dateTxt(t.at)+' · '+t.side+' · '+t.reason+warning,(t.pnl>=0?'+':'')+money(t.pnl)+budget);});
+ const events=el('events');events.replaceChildren();
+ if(!data.events?.length)events.textContent='Nenhum evento ainda.';
+ else data.events.forEach(e=>line(events,dateTxt(e.at),e.message));
+}
+async function refresh(){
+ const button=el('refresh');button.disabled=true;button.textContent='Carregando...';
+ try{const res=await fetch('./state.json?nocache='+Date.now(),{cache:'no-store'});if(!res.ok)throw Error('HTTP '+res.status);render(await res.json());}
+ catch(error){el('status').textContent='SEM CONEXÃO';el('status').className='status err';el('message').textContent='Não foi possível carregar o estado publicado. '+String(error.message);}
+ finally{button.disabled=false;button.textContent='Atualizar';}
+}
+el('refresh').onclick=refresh;window.addEventListener('resize',draw);refresh();setInterval(refresh,120000);
+</script></body></html>
+=============== FIM v2/index.html ===============
+
+
+=============== INÍCIO v1.html ===============
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Forex Bot Pro V1 | Simulador</title><style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Arial;background:#0b1020;color:#e8eefc}*{box-sizing:border-box}body{margin:0}main{max-width:1200px;margin:auto;padding:22px}h1{font-size:27px;margin:4px 0}h2{font-size:16px;margin:0 0 12px}.muted{color:#9faecb}.banner{padding:12px 16px;background:#3c301a;border:1px solid #a77b23;border-radius:12px;color:#ffe6a2;margin:18px 0}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.pill{background:#193c37;color:#76e2b0;padding:6px 10px;border-radius:999px;font-weight:700;font-size:12px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card,.panel{background:#151d32;border:1px solid #293450;border-radius:14px;padding:17px}.card small{display:block;color:#a9b6cf;margin-bottom:8px}.number{font-weight:750;font-size:24px;letter-spacing:-.5px}.positive{color:#62d7ab}.negative{color:#ff8d98}.layout{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:12px}.panel{margin-top:12px;min-width:0}.buttons{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}button{background:#497cfa;border:none;color:#fff;padding:11px 13px;border-radius:9px;font-weight:700;cursor:pointer}button.secondary{background:#2d3a59}button.danger{background:#763544}button:disabled{opacity:.5;cursor:not-allowed}canvas{width:100%;height:300px;display:block}table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}th,td{padding:10px;border-bottom:1px solid #2b3651;text-align:left}th{color:#adbcd5} .scroll{overflow-x:auto}.kv{display:grid;grid-template-columns:1fr auto;gap:12px;font-size:14px;margin:12px 0}.kv span:first-child{color:#a9b6cf}.events{font-size:13px;color:#cbd6eb;max-height:180px;overflow:auto}.events div{padding:8px 0;border-bottom:1px solid #293450}footer{font-size:12px;color:#9baac6;margin:24px 0}@media(max-width:800px){main{padding:12px}.cards{grid-template-columns:repeat(2,1fr)}.layout{grid-template-columns:1fr}.number{font-size:22px}}@media(max-width:350px){.cards{grid-template-columns:1fr}}
+</style></head><body><main>
+<div class="top"><div><h1>Forex Bot Pro <span class="muted">V1</span></h1><div class="muted">EUR/USD · 15 minutos · Robô de operações simuladas · roda no navegador</div></div><span class="pill">● DEMO · iPHONE</span></div>
+<div class="banner"><b>AVISO:</b> todas as cotações são GERADAS ARTIFICIALMENTE. Não há preços de mercado, conexão com corretora nem ordens reais. Resultados não preveem desempenho futuro.</div>
+<section class="cards"><div class="card"><small>Saldo realizado</small><div class="number" id="balance">—</div></div><div class="card"><small>Patrimônio com posição aberta</small><div class="number" id="equity">—</div></div><div class="card"><small>Resultado total</small><div class="number" id="pnl">—</div></div><div class="card"><small>Operações encerradas / acerto</small><div class="number" id="trades">—</div></div></section>
+<div class="layout"><section class="panel"><h2>Preço sintético EUR/USD</h2><canvas id="chart" width="960" height="320" aria-label="Gráfico de preços sintéticos"></canvas><div class="muted" id="lastPrice">Aguardando a primeira vela</div><div class="buttons"><button data-count="1">+1 candle</button><button data-count="24">+24 candles (6h)</button><button data-count="96">+96 candles (1 dia)</button><button data-count="500">+500 candles</button></div><div class="buttons"><button class="secondary" id="auto">▶ Iniciar avanço automático</button><button class="danger" id="reset">Reiniciar simulação</button><button class="secondary" id="export">Exportar histórico CSV</button></div><p class="muted" id="status">Pronto para simular</p></section>
+<aside class="panel"><h2>Controle de risco</h2><div class="kv"><span>Capital inicial</span><b>US$ 100,00</b></div><div class="kv"><span>Risco nominal por trade</span><b>0,5%</b></div><div class="kv"><span>Limite de perda diária</span><b>2% do patrimônio de início do dia</b></div><div class="kv"><span>Spread sintético</span><b>1,2 pip</b></div><div class="kv"><span>Limite de alavancagem</span><b>20x (simulado)</b></div><div class="kv"><span>EMA rápida / lenta</span><b id="ema">—</b></div><div class="kv"><span>RSI 14 / ATR 14</span><b id="indicators">—</b></div><div class="kv"><span>Risco por próxima operação</span><b id="risk">—</b></div><hr style="border:0;border-top:1px solid #293450"><h2>Posição atual</h2><div id="position" class="muted">Nenhuma posição aberta</div></aside></div>
+<section class="panel"><h2>Histórico de operações fechadas</h2><div class="scroll"><table><thead><tr><th>Entrada (UTC)</th><th>Lado</th><th>Unidades EUR</th><th>Entrada</th><th>Saída</th><th>Motivo</th><th>P/L (USD)</th></tr></thead><tbody id="history"><tr><td colspan="7">Nenhuma operação ainda</td></tr></tbody></table></div></section>
+<section class="panel"><h2>Registro de eventos</h2><div id="events" class="events">Aguardando...</div></section>
+<footer>Estratégia experimental: cruzamento EMA 9/21, filtro RSI 14, Stop Loss de 1,5 ATR e alvo de 2x a distância do stop; apenas uma posição por vez. Spread incluído; ausência de comissões, swaps e impacto real de mercado. A perda efetiva pode exceder 0,5% em gaps. O bloqueio diário impede novas entradas, mas não liquida posições já abertas. Os dados são salvos localmente no navegador; se limpar os dados do site ou usar outro dispositivo, o histórico não será transferido. Não há servidor nem conta de corretora.</footer>
+</main><script>
+"use strict";
+// Motor V1: totalmente local. Preços artificiais, nunca preços reais de Forex.
+const STORAGE_KEY='forex-bot-pro-v1-mobile-state';
+const START_MS=Date.UTC(2026,10,3,0,0,0);
+const INITIAL=100, RISK=.005, DAILY=.02, SPREAD=.00012, LEVERAGE=20;
+const $=id=>document.getElementById(id);
+const fmt=(v,n=2)=>Number(v).toLocaleString('pt-BR',{minimumFractionDigits:n,maximumFractionDigits:n});
+const usd=v=>'US$ '+fmt(v);
+const rnd=(n,d=6)=>Number(n.toFixed(d));
+let timer=null,busy=false;
+function fresh(){return {version:2,seed:20261103,index:0,pair:'EUR/USD',initial_balance:INITIAL,balance:INITIAL,risk_fraction:RISK,daily_loss_fraction:DAILY,spread:SPREAD,max_leverage:LEVERAGE,candles:[],position:null,trades:[],events:[],day_key:'2026-11-03',day_start_equity:INITIAL,status:'Aguardando candles simulados'};}
+function load(){try{const obj=JSON.parse(localStorage.getItem(STORAGE_KEY));if(obj&&obj.version===2&&Array.isArray(obj.candles)&&Array.isArray(obj.trades)&&Number.isFinite(obj.balance)&&Number.isFinite(obj.index))return obj;}catch(e){}return fresh();}
+let state=load(),storageOkay=true;
+function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));storageOkay=true;}catch(e){storageOkay=false;}}
+function mulberry32(seed){return function(){let t=seed+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};}
+function gaussian(rng,mean=0,std=1){let u=1-rng(),v=rng();return mean+std*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function synthetic(s){const i=s.index,rand=mulberry32((s.seed+i*1009)>>>0);const prev=s.candles.length?s.candles.at(-1).close:1.085;
+  const trend=.000115*Math.sin(i/24)+.00006*Math.sin(i/87);
+  const close=Math.max(.1,prev+trend+gaussian(rand,0,.00024));
+  const up=Math.abs(gaussian(rand,.00010,.000055)),down=Math.abs(gaussian(rand,.00010,.000055));
+  return {time:new Date(START_MS+i*900000).toISOString(),open:rnd(prev),high:rnd(Math.max(prev,close)+up),low:rnd(Math.min(prev,close)-down),close:rnd(close)};
+}
+function ema(vals,n){if(vals.length<n)return null;let avg=vals.slice(0,n).reduce((a,b)=>a+b,0)/n,k=2/(n+1);for(let i=n;i<vals.length;i++)avg=k*vals[i]+(1-k)*avg;return avg;}
+function rsi(vals,n=14){if(vals.length<=n)return null;let gain=0,loss=0;for(let i=vals.length-n;i<vals.length;i++){const d=vals[i]-vals[i-1];gain+=Math.max(0,d);loss+=Math.max(0,-d);}if(loss===0)return gain>0?100:50;return 100-100/(1+gain/loss);}
+function atr(c,n=14){if(c.length<n+1)return null;let sum=0;for(let i=c.length-n;i<c.length;i++){const v=c[i],prev=c[i-1];sum+=Math.max(v.high-v.low,Math.abs(v.high-prev.close),Math.abs(v.low-prev.close));}return sum/n;}
+function equity(s,mid){let e=s.balance,p=s.position;if(p){mid=mid??s.candles.at(-1).close;const exit=mid+(p.side==='BUY'?-SPREAD/2:SPREAD/2);e+=(exit-p.entry)*p.units*(p.side==='BUY'?1:-1);}return e;}
+function log(s,message){s.events.push({index:s.index,message});if(s.events.length>100)s.events.splice(0,s.events.length-100);}
+function closePos(s,c,price,reason){const p=s.position, pnl=(price-p.entry)*p.units*(p.side==='BUY'?1:-1);s.balance=rnd(s.balance+pnl);s.trades.push({...p,exit_time:c.time,exit:rnd(price),pnl:rnd(pnl),reason});s.position=null;log(s,`${p.side} fechado (${reason}): ${pnl>=0?'+':''}${pnl.toFixed(2)} USD`);}
+function step(s){const c=synthetic(s);s.index++;s.candles.push(c);if(s.candles.length>600)s.candles.shift();const today=c.time.slice(0,10);
+  if(today!==s.day_key){s.day_key=today;s.day_start_equity=equity(s,c.open);}
+  s.status='Monitorando EUR/USD sintético';const p=s.position;
+  if(p){if(p.side==='BUY'){
+    if(c.low-SPREAD/2<=p.stop)closePos(s,c,Math.min(p.stop,c.open-SPREAD/2),'Stop Loss');
+    else if(c.high-SPREAD/2>=p.target)closePos(s,c,c.open-SPREAD/2>=p.target?c.open-SPREAD/2:p.target,'Take Profit');
+  }else{
+    if(c.high+SPREAD/2>=p.stop)closePos(s,c,Math.max(p.stop,c.open+SPREAD/2),'Stop Loss');
+    else if(c.low+SPREAD/2<=p.target)closePos(s,c,c.open+SPREAD/2<=p.target?c.open+SPREAD/2:p.target,'Take Profit');
+  }}
+  const closes=s.candles.map(c=>c.close),fast=ema(closes,9),slow=ema(closes,21),momentum=rsi(closes),volatility=atr(s.candles);
+  const canTrade=equity(s)>0&&equity(s)>s.day_start_equity*(1-DAILY);
+  if(!canTrade)s.status='Limite de perda diária alcançado — novas entradas bloqueadas';
+  if(!s.position&&closes.length>22&&canTrade&&volatility){let side=null;const pf=ema(closes.slice(0,-1),9),ps=ema(closes.slice(0,-1),21);
+    if(pf<=ps&&fast>slow&&momentum>=45&&momentum<=75)side='BUY';
+    else if(pf>=ps&&fast<slow&&momentum>=25&&momentum<=55)side='SELL';
+    if(side){const entry=c.close+(side==='BUY'?SPREAD/2:-SPREAD/2),dist=Math.max(volatility*1.5,.00035);
+      const stop=entry+(side==='BUY'?-dist:dist),target=entry+(side==='BUY'?2*dist:-2*dist);
+      const riskUsd=Math.max(0,s.balance)*RISK;
+      const units=Math.floor(Math.min(riskUsd/dist,Math.max(0,equity(s))*LEVERAGE/entry));
+      if(units>=1){s.position={side,entry_time:c.time,entry:rnd(entry),stop:rnd(stop),target:rnd(target),units,planned_risk_usd:rnd(units*dist,4),risk_budget_usd:rnd(riskUsd,4)};log(s,`${side} ${units} EUR @ ${entry.toFixed(5)}; risco planejado $${(units*dist).toFixed(2)}`);}
+    }
+  }
+  return s;
+}
+function snapshot(s){const closes=s.candles.map(c=>c.close),win=s.trades.filter(t=>t.pnl>0).length,e=equity(s),u=e-s.balance;
+  const f=ema(closes,9),l=ema(closes,21),m=rsi(closes),v=atr(s.candles);
+  return {...s,equity:rnd(e,4),unrealized_pnl:rnd(u,4),total_pnl:rnd(e-INITIAL,4),win_rate:s.trades.length?rnd(win*100/s.trades.length,2):0,ema9:f===null?null:rnd(f),ema21:l===null?null:rnd(l),rsi14:m===null?null:rnd(m,2),atr14:v===null?null:rnd(v),max_risk_per_trade_usd:rnd(Math.max(0,s.balance)*RISK,4)};
+}
+function setText(id,value){$(id).textContent=value;}
+function draw(candles){const canvas=$('chart'),ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);ctx.fillStyle='#11192c';ctx.fillRect(0,0,W,H);const data=candles.slice(-100);if(!data.length){ctx.fillStyle='#aabbd9';ctx.fillText('Clique em +24 candles para começar',30,45);return;}const lo=Math.min(...data.map(x=>x.low)),hi0=Math.max(...data.map(x=>x.high)),hi=hi0===lo?lo+.001:hi0;const y=v=>20+(hi-v)/(hi-lo)*(H-40);for(let i=0;i<5;i++){const yy=20+i*(H-40)/4;ctx.strokeStyle='#26334b';ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(W,yy);ctx.stroke();ctx.fillStyle='#93a5c3';ctx.fillText((hi-(hi-lo)*i/4).toFixed(5),7,yy-5);}let st=W/data.length;data.forEach((c,i)=>{const x=(i+.5)*st,up=c.close>=c.open;ctx.strokeStyle=ctx.fillStyle=up?'#4fdbad':'#fa7e8a';ctx.beginPath();ctx.moveTo(x,y(c.high));ctx.lineTo(x,y(c.low));ctx.stroke();const y1=y(Math.max(c.open,c.close)),y2=y(Math.min(c.open,c.close));ctx.fillRect(x-Math.max(1,st*.25),y1,Math.max(2,st*.5),Math.max(1,y2-y1));});}
+function render(s){setText('balance',usd(s.balance));setText('equity',usd(s.equity));setText('pnl',(s.total_pnl>=0?'+':'')+usd(s.total_pnl));$('pnl').className='number '+(s.total_pnl>=0?'positive':'negative');setText('trades',s.trades.length+' / '+fmt(s.win_rate,1)+'%');
+  setText('lastPrice',s.candles.length?'Último preço sintético: '+fmt(s.candles.at(-1).close,5)+' | '+s.candles.at(-1).time.replace('T',' ').slice(0,16)+' UTC | '+s.index+' candles':'Aguardando a primeira vela');
+  setText('status',s.status+(storageOkay?' · Histórico salvo no aparelho':' · Atenção: sem permissão para salvar histórico'));setText('ema',s.ema9===null?'—':fmt(s.ema9,5)+' / '+fmt(s.ema21,5));setText('indicators',s.rsi14===null?'—':fmt(s.rsi14,1)+' / '+fmt(s.atr14,5));setText('risk',usd(s.max_risk_per_trade_usd));
+  const p=s.position;setText('position',p?`${p.side} ${p.units} EUR | entrada ${fmt(p.entry,5)} | SL ${fmt(p.stop,5)} | TP ${fmt(p.target,5)} | P/L não realizado ${usd(s.unrealized_pnl)}`:'Nenhuma posição aberta');
+  const rows=s.trades.slice(-25).reverse();$('history').innerHTML=rows.length?rows.map(t=>`<tr><td>${t.entry_time.slice(0,16).replace('T',' ')}</td><td>${t.side}</td><td>${t.units}</td><td>${fmt(t.entry,5)}</td><td>${fmt(t.exit,5)}</td><td>${t.reason}</td><td class="${t.pnl>=0?'positive':'negative'}">${t.pnl>=0?'+':''}${fmt(t.pnl)}</td></tr>`).join(''):'<tr><td colspan="7">Nenhuma operação ainda</td></tr>';
+  $('events').innerHTML=s.events.length?s.events.slice(-15).reverse().map(e=>`<div>#${e.index} · ${e.message}</div>`).join(''):'Nenhum evento';draw(s.candles);
+}
+function lockButtons(disabled){document.querySelectorAll('button[data-count]').forEach(b=>b.disabled=disabled);}
+async function advance(count){if(busy)return;busy=true;lockButtons(true);try{for(let i=0;i<count;i++){step(state);if(i%150===149)await new Promise(resolve=>requestAnimationFrame(resolve));}save();render(snapshot(state));}catch(e){setText('status','Erro na simulação: '+e.message);}finally{busy=false;lockButtons(false);}}
+function stop(){clearInterval(timer);timer=null;setText('auto','▶ Iniciar avanço automático');}
+document.querySelectorAll('button[data-count]').forEach(b=>b.addEventListener('click',()=>advance(Number(b.dataset.count))));
+$('reset').addEventListener('click',()=>{if(confirm('Apagar todas as operações desta simulação neste aparelho?')){stop();state=fresh();save();render(snapshot(state));}});
+$('auto').addEventListener('click',()=>{if(timer){stop();return;}setText('auto','■ Parar avanço automático');timer=setInterval(()=>advance(1),600);});
+$('export').addEventListener('click',()=>{const fields=['entry_time','side','units','entry','stop','target','exit_time','exit','reason','pnl'];const csv=[fields.join(','),...state.trades.map(t=>fields.map(f=>String(t[f]??'').replaceAll('"','""')).map(v=>'"'+v+'"').join(','))].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='forex_bot_pro_v1_historico.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);});
+render(snapshot(state));
+</script></body></html>
+
+=============== FIM v1.html ===============
+
+
+=============== INÍCIO v2/engine.py ===============
+"""Forex Bot Pro V2: motor de paper trading EUR/USD com candles reais (sem corretora)."""
+from __future__ import annotations
+
+import copy
+import math
+from datetime import datetime, timedelta, timezone
+
+UTC = timezone.utc
+INTERVAL = timedelta(minutes=15)
+SPREAD = 0.00012  # spread HIPOTETICO de 1,2 pip, nao spread da corretora
+RISK = 0.005
+DAILY_LOSS = 0.02
+LEVERAGE = 20.0
+
+
+def iso(dt):
+    return dt.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def dtparse(value):
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00").replace(" ", "T"))
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
+
+
+def initial_state():
+    return {
+        "version": 2, "pair": "EUR/USD", "timeframe": "15min",
+        "mode": "PAPER", "source": "Twelve Data",
+        "initial_balance": 100.0, "balance": 100.0,
+        "last_candle": None, "last_check_utc": None,
+        "day": None, "day_start_equity": 100.0,
+        "position": None, "pending": None,
+        "candles": [], "trades": [], "events": [],
+        "warmup_remaining": 0, "missed_intervals": 0,
+        "status": "AGUARDANDO_API", "error": None,
+    }
+
+
+def normalize_values(values, now):
+    """Normaliza apenas candles FECHADOS. O timestamp e o inicio da vela (UTC)."""
+    now = dtparse(now)
+    by_time = {}
+    for item in values:
+        try:
+            stamp = dtparse(item["datetime"])
+            if stamp.minute % 15 or stamp.second or stamp.microsecond:
+                continue
+            if stamp + INTERVAL + timedelta(seconds=30) > now:
+                continue  # nunca usar candle ainda aberto
+            o, h, l, c = (float(item[k]) for k in ("open", "high", "low", "close"))
+            if not all(math.isfinite(v) for v in (o, h, l, c)):
+                continue
+            if not (0.2 <= l <= o <= h <= 5.0 and l <= c <= h):
+                continue
+            by_time[iso(stamp)] = {
+                "time": iso(stamp), "open": o, "high": h, "low": l, "close": c
+            }
+        except (ValueError, TypeError, KeyError, OverflowError):
+            continue
+    return [by_time[t] for t in sorted(by_time)]
+
+
+def ema(values, period):
+    if len(values) < period:
+        return None
+    result = sum(values[:period]) / period
+    alpha = 2.0 / (period + 1)
+    for v in values[period:]:
+        result = alpha * v + (1 - alpha) * result
+    return result
+
+
+def rsi(values, period=14):
+    if len(values) <= period:
+        return None
+    gains = losses = 0.0
+    for i in range(len(values) - period, len(values)):
+        diff = values[i] - values[i - 1]
+        gains += max(0.0, diff)
+        losses += max(0.0, -diff)
+    if losses == 0:
+        return 100.0 if gains else 50.0
+    return 100.0 - 100.0 / (1 + gains / losses)
+
+
+def atr(candles, period=14):
+    if len(candles) <= period:
+        return None
+    tr = []
+    for i in range(len(candles) - period, len(candles)):
+        c, prev = candles[i], candles[i - 1]
+        tr.append(max(c["high"] - c["low"], abs(c["high"] - prev["close"]), abs(c["low"] - prev["close"])))
+    return sum(tr) / period
+
+
+def equity(state, mid=None):
+    value = state["balance"]
+    p = state["position"]
+    if p:
+        if mid is None:
+            mid = state["candles"][-1]["close"]
+        exit_price = mid + (-SPREAD / 2 if p["side"] == "BUY" else SPREAD / 2)
+        direction = 1 if p["side"] == "BUY" else -1
+        value += (exit_price - p["entry"]) * p["units"] * direction
+    return value
+
+
+def event(state, msg):
+    state["events"].append({"at": state["last_candle"], "message": msg})
+    state["events"] = state["events"][-40:]
+
+
+def close_position(state, candle, price, reason):
+    p = state["position"]
+    direction = 1 if p["side"] == "BUY" else -1
+    pnl = round((price - p["entry"]) * p["units"] * direction, 6)
+    state["balance"] = round(state["balance"] + pnl, 6)
+    state["trades"].append({
+        **p, "exit_time": candle["time"], "exit": round(price, 6),
+        "pnl": pnl, "reason": reason
+    })
+    state["trades"] = state["trades"][-250:]
+    state["position"] = None
+    event(state, p["side"] + " encerrada: " + reason + " (USD " + str(round(pnl, 2)) + ")")
+
+
+def evaluate_exit(state, candle):
+    p = state["position"]
+    if not p:
+        return False
+    side = p["side"]
+    if side == "BUY":
+        op = candle["open"] - SPREAD / 2
+        lo = candle["low"] - SPREAD / 2
+        hi = candle["high"] - SPREAD / 2
+        if op <= p["stop"]:
+            close_position(state, candle, op, "STOP_GAP")
+        elif op >= p["target"]:
+            close_position(state, candle, p["target"], "TAKE_PROFIT")
+        elif lo <= p["stop"]:
+            close_position(state, candle, p["stop"], "STOP")
+        elif hi >= p["target"]:
+            close_position(state, candle, p["target"], "TAKE_PROFIT")
+    else:
+        op = candle["open"] + SPREAD / 2
+        hi = candle["high"] + SPREAD / 2
+        lo = candle["low"] + SPREAD / 2
+        if op >= p["stop"]:
+            close_position(state, candle, op, "STOP_GAP")
+        elif op <= p["target"]:
+            close_position(state, candle, p["target"], "TAKE_PROFIT")
+        elif hi >= p["stop"]:
+            close_position(state, candle, p["stop"], "STOP")
+        elif lo <= p["target"]:
+            close_position(state, candle, p["target"], "TAKE_PROFIT")
+    return state["position"] is None
+
+
+def daily_ok(state, price):
+    return equity(state, price) > 0 and equity(state, price) > state["day_start_equity"] * (1 - DAILY_LOSS)
+
+
+def enter_pending(state, candle):
+    pending = state["pending"]
+    state["pending"] = None
+    if not pending or not daily_ok(state, candle["open"]):
+        return
+    side, distance = pending["side"], pending["distance"]
+    entry = candle["open"] + (SPREAD / 2 if side == "BUY" else -SPREAD / 2)
+    risk_budget = max(0.0, state["balance"]) * RISK
+    units = math.floor(min(risk_budget / distance, max(0.0, equity(state, candle["open"])) * LEVERAGE / entry))
+    if units < 1:
+        event(state, "Sinal ignorado: capital insuficiente")
+        return
+    state["position"] = {
+        "side": side, "entry_time": candle["time"],
+        "entry": round(entry, 6), "units": units,
+        "stop": round(entry + (-distance if side == "BUY" else distance), 6),
+        "target": round(entry + (2 * distance if side == "BUY" else -2 * distance), 6),
+        "planned_risk_usd": round(units * distance, 4),
+    }
+    event(state, side + " simulada: " + str(units) + " EUR")
+
+
+def signal(candles):
+    if len(candles) < 23:
+        return None
+    closes = [c["close"] for c in candles]
+    prev_fast, prev_slow = ema(closes[:-1], 9), ema(closes[:-1], 21)
+    fast, slow = ema(closes, 9), ema(closes, 21)
+    momentum, volatility = rsi(closes), atr(candles)
+    if None in (prev_fast, prev_slow, fast, slow, momentum, volatility):
+        return None
+    side = None
+    if prev_fast <= prev_slow and fast > slow and 45 <= momentum <= 75:
+        side = "BUY"
+    elif prev_fast >= prev_slow and fast < slow and 25 <= momentum <= 55:
+        side = "SELL"
+    return {"side": side, "distance": max(1.5 * volatility, 0.00035)} if side else None
+
+
+def process_candle(state, candle):
+    last = state["last_candle"]
+    if last and candle["time"] <= last:
+        return
+    gap = bool(last and dtparse(candle["time"]) - dtparse(last) > INTERVAL)
+    if gap:
+        missing = int((dtparse(candle["time"]) - dtparse(last)) / INTERVAL) - 1
+        state["missed_intervals"] += missing
+        state["warmup_remaining"] = 22
+        state["pending"] = None
+        event(state, "Intervalo sem dados: " + str(missing) + " velas; novas entradas pausadas")
+    day = candle["time"][:10]
+    if day != state["day"]:
+        state["day"] = day
+        state["day_start_equity"] = round(equity(state, candle["open"]), 6)
+    if not gap and state["warmup_remaining"] == 0:
+        enter_pending(state, candle)
+    else:
+        state["pending"] = None
+    closed = evaluate_exit(state, candle)
+    state["candles"].append(candle)
+    state["candles"] = state["candles"][-250:]
+    state["last_candle"] = candle["time"]
+    if state["warmup_remaining"] > 0:
+        state["warmup_remaining"] -= 1
+    if not state["position"] and not closed and state["warmup_remaining"] == 0 and daily_ok(state, candle["close"]):
+        s = signal(state["candles"])
+        if s:
+            state["pending"] = {**s, "signal_time": candle["time"]}
+            event(state, "Sinal " + s["side"] + " para proxima vela (sem ordem real)")
+
+
+def update_state(state, candles, now):
+    state = copy.deepcopy(state)
+    now = dtparse(now)
+    state["last_check_utc"] = iso(now)
+    state["error"] = None
+    if not candles:
+        state["status"] = "SEM_DADOS"
+        return state
+    if not state["last_candle"]:
+        # Inicializa indicadores, SEM criar operacoes retroativas.
+        state["candles"] = candles[-200:]
+        state["last_candle"] = candles[-1]["time"]
+        state["day"] = candles[-1]["time"][:10]
+        state["day_start_equity"] = state["balance"]
+        age = now - (dtparse(state["last_candle"]) + INTERVAL)
+        state["status"] = "DADOS_ATRASADOS_OU_MERCADO_FECHADO" if age > timedelta(hours=3) else "MONITORANDO"
+        event(state, "Indicadores inicializados; sem trades historicos")
+        return state
+    fresh = [c for c in candles if c["time"] > state["last_candle"]]
+    for candle in fresh:
+        process_candle(state, candle)
+    age = now - (dtparse(state["last_candle"]) + INTERVAL)
+    state["status"] = "DADOS_ATRASADOS_OU_MERCADO_FECHADO" if age > timedelta(hours=3) else "MONITORANDO"
+    return state
+
+
+def summary(state):
+    last = state["candles"][-1]["close"] if state["candles"] else None
+    eq = equity(state, last) if last is not None else state["balance"]
+    trades = state["trades"]
+    wins = sum(1 for t in trades if t["pnl"] > 0)
+    return {
+        "equity": round(eq, 4),
+        "pnl": round(eq - state["initial_balance"], 4),
+        "closed_trades": len(trades),
+        "win_rate": round(100 * wins / len(trades), 2) if trades else 0.0,
+        "last_price": last,
+        "risk_per_trade_usd": round(max(0.0, state["balance"]) * RISK, 4),
+    }
+
+=============== FIM v2/engine.py ===============
+
+
+=============== INÍCIO v2/tests/test_engine.py ===============
+"""Testes offline. Dados inventados APENAS nos testes, nunca na producao."""
+import sys
+import unittest
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from engine import (
+    initial_state, normalize_values, update_state, process_candle,
+    enter_pending, evaluate_exit, summary, iso, dtparse
+)
+
+UTC = timezone.utc
+BASE = datetime(2026, 11, 3, 10, 0, tzinfo=UTC)
+
+
+def bar(i, price=1.08, high=None, low=None):
+    return {
+        "time": iso(BASE + timedelta(minutes=15 * i)),
+        "open": price, "high": high if high is not None else price + .0002,
+        "low": low if low is not None else price - .0002, "close": price
+    }
+
+
+class EngineTests(unittest.TestCase):
+    def test_normalize_ignores_open_invalid_and_duplicates(self):
+        rows = [
+            {"datetime": "2026-11-03 10:00:00", "open": "1.08", "high": "1.081",
+             "low": "1.079", "close": "1.08"},
+            {"datetime": "2026-11-03 10:15:00", "open": "1.08", "high": "1.081",
+             "low": "1.079", "close": "1.08"},
+            {"datetime": "2026-11-03 09:45:00", "open": "1.08", "high": "0",
+             "low": "1.079", "close": "1.08"},
+        ]
+        now = BASE + timedelta(minutes=30, seconds=45)
+        candles = normalize_values(rows, now)
+        self.assertEqual(len(candles), 2)
+        self.assertEqual(candles[0]["time"], iso(BASE))
+
+    def test_bootstrap_does_not_backtrade(self):
+        state = update_state(initial_state(), [bar(i) for i in range(50)],
+                             BASE + timedelta(hours=13))
+        self.assertEqual(state["balance"], 100)
+        self.assertEqual(state["trades"], [])
+        self.assertIsNone(state["position"])
+        self.assertIsNone(state["pending"])
+        self.assertEqual(state["last_candle"], bar(49)["time"])
+
+    def test_idempotent_same_candles(self):
+        first = update_state(initial_state(), [bar(i) for i in range(40)],
+                             BASE + timedelta(hours=11))
+        second = update_state(first, [bar(i) for i in range(40)],
+                              BASE + timedelta(hours=11))
+        self.assertEqual(second["candles"], first["candles"])
+        self.assertEqual(second["trades"], first["trades"])
+
+    def test_entry_waits_until_next_candle_and_limits_risk(self):
+        s = initial_state()
+        s["last_candle"] = bar(0)["time"]
+        s["day"] = bar(0)["time"][:10]
+        s["candles"] = [bar(0)]
+        s["pending"] = {"side": "BUY", "distance": .001, "signal_time": bar(0)["time"]}
+        self.assertIsNone(s["position"])
+        process_candle(s, bar(1))
+        self.assertIsNotNone(s["position"])
+        self.assertLessEqual(s["position"]["planned_risk_usd"], .5 + 1e-6)
+        self.assertEqual(s["position"]["entry_time"], bar(1)["time"])
+
+    def test_stop_has_priority_when_both_touched(self):
+        s = initial_state()
+        s["position"] = {"side": "BUY", "entry": 1.08, "units": 400,
+                         "stop": 1.079, "target": 1.082, "entry_time": bar(0)["time"]}
+        c = bar(1, high=1.083, low=1.078)
+        self.assertTrue(evaluate_exit(s, c))
+        self.assertEqual(s["trades"][-1]["reason"], "STOP")
+        self.assertLess(s["trades"][-1]["pnl"], 0)
+
+    def test_gap_uses_worse_open_for_stop(self):
+        s = initial_state()
+        s["position"] = {"side": "BUY", "entry": 1.08, "units": 400,
+                         "stop": 1.079, "target": 1.082, "entry_time": bar(0)["time"]}
+        c = bar(1, price=1.077, high=1.078, low=1.076)
+        evaluate_exit(s, c)
+        self.assertEqual(s["trades"][-1]["reason"], "STOP_GAP")
+        self.assertLess(s["trades"][-1]["exit"], 1.079)
+
+    def test_gap_pauses_new_entries(self):
+        s = initial_state()
+        s["last_candle"] = bar(0)["time"]
+        s["candles"] = [bar(0)]
+        s["day"] = bar(0)["time"][:10]
+        s["pending"] = {"side": "BUY", "distance": .001, "signal_time": bar(0)["time"]}
+        process_candle(s, bar(8))
+        self.assertIsNone(s["position"])
+        self.assertIsNone(s["pending"])
+        self.assertEqual(s["missed_intervals"], 7)
+        self.assertGreater(s["warmup_remaining"], 0)
+
+    def test_daily_limit_blocks_entry(self):
+        s = initial_state()
+        s["balance"] = 97.9
+        s["pending"] = {"side": "BUY", "distance": .001, "signal_time": bar(0)["time"]}
+        enter_pending(s, bar(1))
+        self.assertIsNone(s["position"])
+
+    def test_summary_pnl(self):
+        s = initial_state()
+        s["balance"] = 101.25
+        self.assertEqual(summary(s)["pnl"], 1.25)
+
+    def test_stale_market_status(self):
+        s = update_state(initial_state(), [bar(i) for i in range(40)],
+                         BASE + timedelta(hours=11))
+        s = update_state(s, [bar(i) for i in range(40)],
+                         BASE + timedelta(days=3))
+        self.assertEqual(s["status"], "DADOS_ATRASADOS_OU_MERCADO_FECHADO")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+=============== FIM v2/tests/test_engine.py ===============
