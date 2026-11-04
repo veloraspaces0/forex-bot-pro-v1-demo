@@ -9,7 +9,11 @@ const state=(updated=4,candle=20,opened=false,now=NOW,extra={})=>({
   mode:"PAPER_ONLY",pair:"EUR/USD",interval:"15min",risk_violations:0,
   last_checked_at:stamp(updated,now),updated_at:stamp(updated,now),
   last_candle_at:stamp(candle,now),open_position:opened,position_side:opened?"SELL":null,
-  status:"monitoring",gap_halt:false,balance:99.5,estimated_equity:99.45,closed_trades:1,...extra
+  status:"monitoring",gap_halt:false,balance:99.5,estimated_equity:99.45,
+  initial_balance:100,pnl_total:-0.55,
+  closed_trades:1,wins:0,losses:1,
+  closed_results:[{at:"2026-11-04T07:30:00Z",side:"SELL",pnl:-0.5}],
+  equity_curve:[{n:0,balance:100},{n:1,balance:99.5}],...extra
 });
 const runs=(ages=[4,19,34,49,64],now=NOW)=>ages.map((min,k)=>({
   id:k+1,head_branch:"main",name:"Forex Bot Pro V2 - Paper EURUSD",
