@@ -248,7 +248,8 @@ def update_state(state, candles, now):
         state["last_candle"] = candles[-1]["time"]
         state["day"] = candles[-1]["time"][:10]
         state["day_start_equity"] = state["balance"]
-        state["status"] = "MONITORANDO"
+        age = now - (dtparse(state["last_candle"]) + INTERVAL)
+        state["status"] = "DADOS_ATRASADOS_OU_MERCADO_FECHADO" if age > timedelta(hours=3) else "MONITORANDO"
         event(state, "Indicadores inicializados; sem trades historicos")
         return state
     fresh = [c for c in candles if c["time"] > state["last_candle"]]
