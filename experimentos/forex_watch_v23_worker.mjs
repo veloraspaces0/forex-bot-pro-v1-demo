@@ -165,7 +165,9 @@ export function assess(state, runs, now) {
     gaps.push(Math.round((Date.parse(schedules[i].created_at)-Date.parse(schedules[i+1].created_at))/6000)/10);
   if (!gaps.length) flag("ATENCAO", "INSUFFICIENT_SCHEDULE_HISTORY", "Histórico insuficiente.");
   else if (Math.max(...gaps)>30) flag("ATENCAO", "CADENCE_DELAY", "Intervalo entre execuções agendadas >30 min.");
-  if (matching.slice(1,5).some(x => FAILURE.has(x.conclusion) && minutesAgo(x.created_at,now)<90))
+  const recentFailedRun=matching.slice(1,5).find(x =>
+    FAILURE.has(x.conclusion) && minutesAgo(x.created_at,now)<90);
+  if(recentFailedRun)
     flag("ATENCAO", "RECENT_FAILURE", "Workflow teve falha recente.");
   const status = issues.some(i => i.severity === "CRITICO") ? "CRITICO" :
     (issues.length ? "ATENCAO" : "OK");
@@ -178,11 +180,14 @@ export function assess(state, runs, now) {
     maxClosedDrawdownPct:state.max_closed_drawdown_pct,
     // A corrupted closed_results is a history inconsistency, not an
     // unhandled exception converting a known anomaly into INDETERMINADO.
+    // runner.py emits closed_results in REVERSE chronological order:
+    // index 0 is the newest closed trade, not the oldest.
     lastClosedTradeKey:closedResults.length && closedResults[0] &&
       typeof closedResults[0]==="object" && !Array.isArray(closedResults[0])?
       JSON.stringify(["at","side","pnl","reason"].map(k=>closedResults[0][k]??null)):null,
     checkedAt:checked, candleAt:state.last_candle_at,
-    lastRunId:latest?.id || null, source:"PUBLIC_GITHUB_ONLY"};
+    lastRunId:latest?.id || null, recentFailedRunId:recentFailedRun?.id || null,
+    source:"PUBLIC_GITHUB_ONLY"};
 }
 async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setTimeout(resolve,ms))) {
   for (let n=0; n<FETCH_ATTEMPTS; n++) {
@@ -229,7 +234,12 @@ export async function readPublic(now=Date.now(), fetcher=fetch) {
 function incidentFingerprint(report) {
   const codes=(report.issues||[]).map(x=>x.code).sort();
   const runSpecific=codes.some(x=>["RUN_FAILED","RUN_STUCK","QUEUE_STUCK"].includes(x));
-  return report.status+"|"+codes.join(",")+(runSpecific && report.lastRunId?"|run:"+report.lastRunId:"");
+  const latestId=runSpecific && report.lastRunId?"|run:"+report.lastRunId:"";
+  const recentId=codes.includes("RECENT_FAILURE") && report.recentFailedRunId?
+    "|recentFailed:"+report.recentFailedRunId:"";
+  const riskCount=codes.includes("RISK_VIOLATIONS")?
+    "|riskViolations:"+String(report.riskViolations??"unknown"):"";
+  return report.status+"|"+codes.join(",")+latestId+recentId+riskCount;
 }
 function alertText(report) {
   const url = "https://github.com/" + GITHUB_REPO + "/actions";
