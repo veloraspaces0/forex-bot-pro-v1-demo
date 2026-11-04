@@ -106,13 +106,15 @@ def diagnose(runs, state, now):
         key=lambda r: parse_time(r["created_at"]), reverse=True,
     )
     report = {"checked_at_utc": now.isoformat(), "scheduled_runs": len(scheduled),
-              "intervals_minutes": [], "anomalies": []}
+              "intervals_minutes": [], "anomalies": [], "historical_anomalies": []}
+    recent_cutoff = now - dt.timedelta(hours=2)
     for a, b in zip(scheduled, scheduled[1:]):
         gap = round((parse_time(a["created_at"]) - parse_time(b["created_at"])).total_seconds()/60, 2)
         report["intervals_minutes"].append(gap)
         if gap > 30:
-            report["anomalies"].append({"type": "schedule_interval", "minutes": gap,
-                                        "newer_run": a["html_url"]})
+            target = "anomalies" if parse_time(a["created_at"]) >= recent_cutoff else "historical_anomalies"
+            report[target].append({"type": "schedule_interval", "minutes": gap,
+                                   "newer_run": a.get("html_url")})
     for r in scheduled:
         created = parse_time(r["created_at"])
         started = parse_time(r["run_started_at"]) if r.get("run_started_at") else None
@@ -126,13 +128,15 @@ def diagnose(runs, state, now):
         if r.get("conclusion") == "success" and r.get("status") not in (None, "completed"):
             report["anomalies"].append({"type": "inconsistent_run_status", "run": r.get("html_url")})
         if r.get("status") in ("queued", "in_progress", "waiting", "pending", "requested"):
-            report["anomalies"].append({"type": "run_not_completed", "run": r.get("html_url"),
-                                        "status": r["status"]})
+            if (now - created).total_seconds() > 20 * 60:
+                report["anomalies"].append({"type": "run_not_completed", "run": r.get("html_url"),
+                                            "status": r["status"]})
         if r.get("status") == "completed" and r.get("conclusion") is None:
             report["anomalies"].append({"type": "missing_run_conclusion", "run": r.get("html_url")})
         if r.get("conclusion") in ("failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale", "skipped"):
-            report["anomalies"].append({"type": "workflow_failure", "run": r["html_url"],
-                                        "conclusion": r["conclusion"]})
+            target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
+            report[target].append({"type": "workflow_failure", "run": r.get("html_url"),
+                                   "conclusion": r["conclusion"]})
     successful = [r for r in scheduled if r.get("conclusion") == "success"
                   and r.get("status", "completed") == "completed"]
     if scheduled and not successful:
