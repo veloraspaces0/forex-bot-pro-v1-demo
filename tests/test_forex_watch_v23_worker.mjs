@@ -722,3 +722,35 @@ test("partial GitHub failure remains INDETERMINADO (no false healthy claim)",asy
   assert.equal(out.report.status,"INDETERMINADO");
   assert.ok(codes(out.report).includes("GITHUB_RUNS_HTTP_403"));
 });
+
+test("state REST 403 falls back to public raw JSON without token leakage",async()=>{
+  const seen=[];
+  const fake=async (url,options={})=>{
+    seen.push({url:String(url),auth:options.headers?.Authorization});
+    if(String(url).includes("/contents/"))
+      return new Response("forbidden",{status:403});
+    if(String(url).startsWith("https://raw.githubusercontent.com/"))
+      return new Response(JSON.stringify(state()),{status:200});
+    return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+  };
+  const report=await readPublic(NOW,fake,"FAKE_SECRET");
+  assert.equal(report.status,"OK");
+  assert.ok(seen.some(x=>x.url.startsWith("https://raw.githubusercontent.com/")));
+  assert.ok(seen.filter(x=>x.url.startsWith("https://raw.githubusercontent.com/")).every(x=>!x.auth));
+});
+test("state REST 403 and raw failure remain INDETERMINADO",async()=>{
+  const fake=async url=>String(url).includes("/actions/")
+    ?new Response(JSON.stringify({workflow_runs:runs()}),{status:200})
+    :new Response("forbidden",{status:403});
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403"));
+});
+test("state REST 429 falls back to raw content",async()=>{
+  const fake=async url=>String(url).includes("/contents/")
+    ?new Response("limited",{status:429})
+    :new Response(JSON.stringify(String(url).includes("/actions/")
+      ?{workflow_runs:runs()}:state()),{status:200});
+  const out=await readPublic(NOW,fake);
+  assert.equal(out.status,"OK");
+});
