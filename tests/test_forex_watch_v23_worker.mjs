@@ -506,3 +506,24 @@ test("arbitrary unexpected engine status is not falsely green",()=>{
   assert.equal(result.status,"ATENCAO");
   assert.ok(codes(result).includes("UNRECOGNIZED_BOT_STATUS"));
 });
+
+
+test("GitHub success cannot mask a skipped PAPER job with no new public state",()=>{
+  const rr=runs([12,27,42,57,72]);
+  rr[0].updated_at=stamp(10);
+  const out=assess(state(20,20,true),rr,NOW);
+  assert.equal(out.status,"CRITICO");
+  assert.ok(codes(out).includes("SUCCESS_WITHOUT_NEW_STATE"));
+});
+test("GitHub commit propagation grace prevents premature false positive",()=>{
+  const rr=runs([12,27,42,57,72]);
+  rr[0].updated_at=stamp(1);
+  const out=assess(state(20,20,true),rr,NOW);
+  assert.ok(!codes(out).includes("SUCCESS_WITHOUT_NEW_STATE"));
+});
+test("fresh PAPER state after run is not considered skipped",()=>{
+  const rr=runs([12,27,42,57,72]);
+  rr[0].updated_at=stamp(9);
+  const out=assess(state(4,20,true),rr,NOW);
+  assert.ok(!codes(out).includes("SUCCESS_WITHOUT_NEW_STATE"));
+});
