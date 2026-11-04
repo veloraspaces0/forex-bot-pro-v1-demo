@@ -8,6 +8,13 @@ on:
       - 'experimentos/forex_v211_schedule_diagnostics.py'
       - 'tests/test_forex_v211_schedule_diagnostics.py'
       - '.github/workflows/forex-v211-diagnostics-tests.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'experimentos/forex_v211_schedule_diagnostics.py'
+      - 'tests/test_forex_v211_schedule_diagnostics.py'
+      - '.github/workflows/forex-v211-diagnostics-tests.yml'
   workflow_dispatch:
 
 permissions:
@@ -15,7 +22,6 @@ permissions:
 
 jobs:
   offline-diagnostics:
-    if: github.ref == 'refs/heads/fix/v211-scheduler-reliability-diagnostics'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
