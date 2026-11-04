@@ -249,7 +249,15 @@ def process(s, bars, now):
         s['updated_at'] = stamp(now)
         return s
     if previous is None:
-        s['candles'] = closed[-220:]
+        history = closed[-220:]
+        if any(missing_trading_bar(a['time'], z['time']) for a,z in zip(history,history[1:])):
+            s['gap_halt'] = True
+            s['status'] = 'data_gap'
+            s['message'] = 'Initial historical candles contain a trading-session gap; manual review required.'
+            note(s, stamp(now), 'DATA GAP during initialization: trading halted')
+            s['updated_at'] = stamp(now)
+            return s
+        s['candles'] = history
         s['last_bar'] = last['time']
         note(s, stamp(now), 'Initialized indicators; no historical trades.')
         s['message'] = 'Histórico inicial carregado. Aguardando próximo candle.'
