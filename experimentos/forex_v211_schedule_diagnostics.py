@@ -82,6 +82,8 @@ def fetch_workflow_runs(base, max_pages=5):
             pagination_anomalies.append("total_count_changed")
         if not batch and len(all_runs) < expected:
             pagination_anomalies.append("unexpected_empty_page")
+        if len(batch) == 100 and all(item.get("id") in seen_ids for item in batch if isinstance(item, dict)):
+            pagination_anomalies.append("duplicate_page")
         for item in batch:
             if not isinstance(item, dict):
                 raise ValueError("Invalid workflow run entry")
@@ -239,7 +241,9 @@ def diagnose(runs, state, now):
             report["anomalies"].append({"type": "critical_open_position_unchecked", "reason": "missing_timestamp"})
     if state.get("status") == "api_error":
         report["anomalies"].append({"type": "api_error"})
-    if state.get("gap_halt") or state.get("status") in ("data_gap", "gap_halt"):
+    if type(state.get("gap_halt")) is not bool:
+        report["anomalies"].append({"type": "invalid_gap_halt_flag"})
+    if state.get("gap_halt") is True or state.get("status") in ("data_gap", "gap_halt"):
         report["anomalies"].append({"type": "gap_halt_or_data_gap"})
     if not scheduled:
         report["anomalies"].append({"type": "history_unavailable_or_empty" if not runs else "no_matching_scheduled_runs"})
