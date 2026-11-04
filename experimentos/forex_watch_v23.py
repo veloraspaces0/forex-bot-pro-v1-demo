@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 REPOSITORY = "veloraspaces0/forex-bot-pro-v1-demo"
 WORKFLOW_NAME = "Forex Bot Pro V2 - Paper EURUSD"
 STATE_ENDPOINT = "contents/v2/state.json?ref=main"
-RUNS_ENDPOINT = "actions/runs?branch=main&per_page=100"
+RUNS_ENDPOINT = "actions/workflows/forex-v2.yml/runs?branch=main&per_page=100"
 TIMEOUT_SEC = 12
 MAX_RESPONSE_BYTES = 2_000_000
 NY = ZoneInfo("America/New_York")
@@ -160,7 +160,7 @@ def assess(state, runs, now):
 
 def github_json(path, *, opener=None, sleeper=time.sleep, retries=3):
     """Retrieve public GitHub JSON with bounded retries for transient errors."""
-    if not path.startswith(("contents/v2/state.json?", "actions/runs?")):
+    if not path.startswith(("contents/v2/state.json?", "actions/workflows/forex-v2.yml/runs?")):
         raise ValueError("GitHub endpoint fora da lista permitida")
     opener = opener or urllib.request.urlopen
     req = urllib.request.Request(
