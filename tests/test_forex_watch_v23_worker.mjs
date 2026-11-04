@@ -961,3 +961,21 @@ test("malformed Retry-After does not cause an early REST retry",async()=>{
   assert.equal(out.report.status,"OK");
   assert.equal(stateCalls,1,"invalid cooldown must not lead to aggressive retry");
 });
+
+test("HTTP-date Retry-After above retry budget never retries REST",async()=>{
+  let stateCalls=0;
+  const fake=async url=>{
+    if(String(url).includes("/contents/")){
+      stateCalls++;
+      return new Response("slow down",{status:429,headers:{
+        "retry-after":new Date(Date.now()+3600000).toUTCString()
+      }});
+    }
+    if(String(url).startsWith("https://raw.githubusercontent.com/"))
+      return new Response(JSON.stringify(state()),{status:200});
+    return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+  };
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"OK");
+  assert.equal(stateCalls,1,"HTTP-date cooldown must prevent early REST retry");
+});
