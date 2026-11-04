@@ -54,7 +54,10 @@ export function assess(state, runs, now) {
     if (["queued", "waiting"].includes(latest.status)) {
       if (runAge > 20) flag("CRITICO", "QUEUE_STUCK", "Execução parada na fila.");
     } else if (latest.status === "in_progress") {
-      if (minutesAgo(latest.run_started_at || latest.created_at, now) > 20)
+      if (!latest.run_started_at)
+        flag(runAge>75?"CRITICO":"ATENCAO","RUN_START_UNKNOWN",
+          "Sem run_started_at: duração real da execução é desconhecida.");
+      else if (minutesAgo(latest.run_started_at, now) > 20)
         flag("CRITICO", "RUN_STUCK", "Execução travada em andamento.");
     } else if (latest.status === "completed") {
       if (FAILURE.has(latest.conclusion))
