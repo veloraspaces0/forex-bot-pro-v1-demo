@@ -112,6 +112,16 @@ class PaperIntegrity(unittest.TestCase):
         b.check_exit(s,dict(time='2026-11-02T10:15:00Z',open=1.085,low=1.081,high=1.088))
         self.assertEqual(s['trades'][0]['reason'],'STOP')
 
+    def test_bootstrap_fails_closed_on_initial_gap(self):
+        data=bars(81)
+        # Remove an active-market bar from the first window.
+        incomplete=data[:45]+data[46:]
+        s=b.process(b.initial(),incomplete,b.date(data[-1]['time'])+timedelta(minutes=20))
+        self.assertTrue(s['gap_halt'])
+        self.assertEqual(s['status'],'data_gap')
+        self.assertIsNone(s['last_bar'])
+        self.assertFalse(s['trades'])
+
     def test_internal_history_gap_halts_before_processing(self):
         data=bars(81)
         s=b.initial()
