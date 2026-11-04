@@ -1,0 +1,303 @@
+FOREX BOT PRO V2.1 CONSOLIDADA — REAUDITORIA DEEPSEEK
+PARTE 5/5: EVIDÊNCIAS VERIFICÁVEIS DO CI E ESTADO PÚBLICO
+
+Teste CI: https://github.com/veloraspaces0/forex-bot-pro-v1-demo/actions/runs/41831696974
+Job verify: concluído com sucesso. Job paper: SKIPPED na branch de teste.
+Atenção: state.json pertence à V2 main herdada, NÃO é uma execução prospectiva da V2.1.
+
+=============== INÍCIO LOG CI V2.1 CONSOLIDADA ===============
+﻿2026-11-04T12:43:17.4627598Z Current runner version: '2.338.2'
+2026-11-04T12:43:17.4651268Z ##[group]Runner Image Provisioner
+2026-11-04T12:43:17.4652185Z Hosted Compute Agent
+2026-11-04T12:43:17.4652845Z Version: 20261021.618
+2026-11-04T12:43:17.4653460Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-11-04T12:43:17.4654157Z Build Date: 2026-10-21T00:45:21Z
+2026-11-04T12:43:17.4655195Z Worker ID: {ca20fbd8-f8d3-4b14-8734-547ee5520ef2}
+2026-11-04T12:43:17.4655954Z Region: westcentralus
+2026-11-04T12:43:17.4656619Z Cloud: Azure
+2026-11-04T12:43:17.4657154Z ##[endgroup]
+2026-11-04T12:43:17.4658607Z ##[group]Operating System
+2026-11-04T12:43:17.4659336Z Ubuntu
+2026-11-04T12:43:17.4659884Z 26.04.1
+2026-11-04T12:43:17.4660424Z LTS
+2026-11-04T12:43:17.4660941Z ##[endgroup]
+2026-11-04T12:43:17.4661486Z ##[group]Runner Image
+2026-11-04T12:43:17.4662118Z Image: ubuntu-26.04
+2026-11-04T12:43:17.4662703Z Version: 20261025.179.1
+2026-11-04T12:43:17.4664003Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-04T12:43:17.4665767Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+2026-11-04T12:43:17.4666762Z ##[endgroup]
+2026-11-04T12:43:17.4667886Z ##[group]GITHUB_TOKEN Permissions
+2026-11-04T12:43:17.4670065Z Contents: read
+2026-11-04T12:43:17.4670661Z Metadata: read
+2026-11-04T12:43:17.4671554Z ##[endgroup]
+2026-11-04T12:43:17.4673659Z Secret source: Actions
+2026-11-04T12:43:17.4674958Z Cache mode: write
+2026-11-04T12:43:17.4675692Z Prepare workflow directory
+2026-11-04T12:43:17.5019173Z Prepare all required actions
+2026-11-04T12:43:17.5067263Z Getting action download info
+2026-11-04T12:43:17.7782647Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-04T12:43:17.8970108Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-11-04T12:43:18.0597373Z Complete job name: verify
+2026-11-04T12:43:18.1450618Z ##[group]Run actions/checkout@v4
+2026-11-04T12:43:18.1451509Z with:
+2026-11-04T12:43:18.1452017Z   repository: veloraspaces0/forex-bot-pro-v1-demo
+2026-11-04T12:43:18.1456334Z   token: ***
+2026-11-04T12:43:18.1456776Z   ssh-strict: true
+2026-11-04T12:43:18.1457216Z   ssh-user: git
+2026-11-04T12:43:18.1457665Z   persist-credentials: true
+2026-11-04T12:43:18.1458167Z   clean: true
+2026-11-04T12:43:18.1458612Z   sparse-checkout-cone-mode: true
+2026-11-04T12:43:18.1459141Z   fetch-depth: 1
+2026-11-04T12:43:18.1459570Z   fetch-tags: false
+2026-11-04T12:43:18.1460008Z   show-progress: true
+2026-11-04T12:43:18.1460449Z   lfs: false
+2026-11-04T12:43:18.1460849Z   submodules: false
+2026-11-04T12:43:18.1461302Z   set-safe-directory: true
+2026-11-04T12:43:18.1461804Z   allow-unsafe-pr-checkout: false
+2026-11-04T12:43:18.1462575Z ##[endgroup]
+2026-11-04T12:43:18.4449691Z Syncing repository: veloraspaces0/forex-bot-pro-v1-demo
+2026-11-04T12:43:18.4451924Z ##[group]Getting Git version info
+2026-11-04T12:43:18.4453501Z Working directory is '/home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo'
+2026-11-04T12:43:18.4455980Z [command]/usr/bin/git version
+2026-11-04T12:43:18.4499631Z git version 2.56.0
+2026-11-04T12:43:18.4519181Z ##[endgroup]
+2026-11-04T12:43:18.4535342Z Temporarily overriding HOME='/home/runner/work/_temp/91f95f32-ac9f-4ffd-990c-3dd3010b94bf' before making global git config changes
+2026-11-04T12:43:18.4537677Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-04T12:43:18.4541412Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo
+2026-11-04T12:43:18.4615909Z Deleting the contents of '/home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo'
+2026-11-04T12:43:18.4619142Z ##[group]Initializing the repository
+2026-11-04T12:43:18.4625162Z [command]/usr/bin/git init /home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo
+2026-11-04T12:43:18.4750427Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-04T12:43:18.4752502Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-04T12:43:18.4754261Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-04T12:43:18.4755980Z hint: call:
+2026-11-04T12:43:18.4756942Z hint:
+2026-11-04T12:43:18.4758031Z hint: 	git config --global init.defaultBranch <name>
+2026-11-04T12:43:18.4759354Z hint:
+2026-11-04T12:43:18.4760583Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-04T12:43:18.4762457Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-04T12:43:18.4764066Z hint:
+2026-11-04T12:43:18.4765350Z hint: 	git branch -m <name>
+2026-11-04T12:43:18.4766437Z hint:
+2026-11-04T12:43:18.4767572Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-04T12:43:18.4769602Z Initialized empty Git repository in /home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo/.git/
+2026-11-04T12:43:18.4786211Z [command]/usr/bin/git remote add origin https://github.com/veloraspaces0/forex-bot-pro-v1-demo
+2026-11-04T12:43:18.4830739Z ##[endgroup]
+2026-11-04T12:43:18.4831970Z ##[group]Disabling automatic garbage collection
+2026-11-04T12:43:18.4835388Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-04T12:43:18.4870434Z ##[endgroup]
+2026-11-04T12:43:18.4871813Z ##[group]Setting up auth
+2026-11-04T12:43:18.4879140Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-04T12:43:18.4913761Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-04T12:43:18.5481787Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-04T12:43:18.5522819Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-04T12:43:18.5804062Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-04T12:43:18.5836631Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-04T12:43:18.6097093Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-04T12:43:18.6135850Z ##[endgroup]
+2026-11-04T12:43:18.6144287Z ##[group]Fetching the repository
+2026-11-04T12:43:18.6146399Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +7f2a5cfcf54741f784eb31eb943ee8b497dd9727:refs/remotes/origin/forex-bot-pro-v2-1-consolidation
+2026-11-04T12:43:19.0204924Z From https://github.com/veloraspaces0/forex-bot-pro-v1-demo
+2026-11-04T12:43:19.0207092Z  * [new ref]         7f2a5cfcf54741f784eb31eb943ee8b497dd9727 -> origin/forex-bot-pro-v2-1-consolidation
+2026-11-04T12:43:19.0210732Z ##[endgroup]
+2026-11-04T12:43:19.0212119Z ##[group]Determining the checkout info
+2026-11-04T12:43:19.0213800Z ##[endgroup]
+2026-11-04T12:43:19.0219559Z [command]/usr/bin/git sparse-checkout disable
+2026-11-04T12:43:19.0270466Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-04T12:43:19.0300207Z ##[group]Checking out the ref
+2026-11-04T12:43:19.0304931Z [command]/usr/bin/git checkout --progress --force -B forex-bot-pro-v2-1-consolidation refs/remotes/origin/forex-bot-pro-v2-1-consolidation
+2026-11-04T12:43:19.0388327Z Switched to a new branch 'forex-bot-pro-v2-1-consolidation'
+2026-11-04T12:43:19.0395155Z branch 'forex-bot-pro-v2-1-consolidation' set up to track 'origin/forex-bot-pro-v2-1-consolidation'.
+2026-11-04T12:43:19.0400905Z ##[endgroup]
+2026-11-04T12:43:19.0442886Z [command]/usr/bin/git log -1 --format=%H
+2026-11-04T12:43:19.0467260Z 7f2a5cfcf54741f784eb31eb943ee8b497dd9727
+2026-11-04T12:43:19.0774001Z ##[group]Run actions/setup-python@v5
+2026-11-04T12:43:19.0775198Z with:
+2026-11-04T12:43:19.0775661Z   python-version: 3.12
+2026-11-04T12:43:19.0776193Z   check-latest: false
+2026-11-04T12:43:19.0780333Z   token: ***
+2026-11-04T12:43:19.0780833Z   update-environment: true
+2026-11-04T12:43:19.0781395Z   allow-prereleases: false
+2026-11-04T12:43:19.0781913Z   freethreaded: false
+2026-11-04T12:43:19.0782401Z ##[endgroup]
+2026-11-04T12:43:19.2169436Z ##[group]Installed versions
+2026-11-04T12:43:19.2290454Z (node:2400) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-04T12:43:19.2292572Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-04T12:43:19.2294196Z Successfully set up CPython (3.12.15)
+2026-11-04T12:43:19.2296079Z ##[endgroup]
+2026-11-04T12:43:19.2515277Z ##[group]Run python -m pip install 'cryptography>=43,<49'
+2026-11-04T12:43:19.2516281Z [36;1mpython -m pip install 'cryptography>=43,<49'[0m
+2026-11-04T12:43:19.2575907Z shell: /usr/bin/bash -e {0}
+2026-11-04T12:43:19.2576805Z env:
+2026-11-04T12:43:19.2577667Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T12:43:19.2579076Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-11-04T12:43:19.2580508Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T12:43:19.2581777Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T12:43:19.2583052Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T12:43:19.2584258Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-11-04T12:43:19.2585574Z ##[endgroup]
+2026-11-04T12:43:20.3749897Z Collecting cryptography<49,>=43
+2026-11-04T12:43:20.4616093Z   Downloading cryptography-48.0.1-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.3 kB)
+2026-11-04T12:43:20.5709894Z Collecting cffi>=2.0.0 (from cryptography<49,>=43)
+2026-11-04T12:43:20.5901383Z   Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+2026-11-04T12:43:20.6168257Z Collecting pycparser (from cffi>=2.0.0->cryptography<49,>=43)
+2026-11-04T12:43:20.6357771Z   Downloading pycparser-3.12-py3-none-any.whl.metadata (9.7 kB)
+2026-11-04T12:43:20.6590364Z Downloading cryptography-48.0.1-cp311-abi3-manylinux_2_34_x86_64.whl (4.7 MB)
+2026-11-04T12:43:20.8855521Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 25.0 MB/s  0:00:00
+2026-11-04T12:43:20.9047650Z Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+2026-11-04T12:43:20.9263382Z Downloading pycparser-3.12-py3-none-any.whl (62 kB)
+2026-11-04T12:43:20.9800924Z Installing collected packages: pycparser, cffi, cryptography
+2026-11-04T12:43:21.2588664Z 
+2026-11-04T12:43:21.2600286Z Successfully installed cffi-2.1.1 cryptography-48.0.1 pycparser-3.12
+2026-11-04T12:43:21.2610288Z 
+2026-11-04T12:43:21.2610764Z [notice] A new release of pip is available: 26.2.2 -> 26.3
+2026-11-04T12:43:21.2611659Z [notice] To update, run: pip install --upgrade pip
+2026-11-04T12:43:21.3123963Z ##[group]Run python -m unittest discover -s tests -v
+2026-11-04T12:43:21.3124385Z [36;1mpython -m unittest discover -s tests -v[0m
+2026-11-04T12:43:21.3154301Z shell: /usr/bin/bash -e {0}
+2026-11-04T12:43:21.3154761Z env:
+2026-11-04T12:43:21.3155066Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T12:43:21.3155481Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-11-04T12:43:21.3155885Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T12:43:21.3156249Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T12:43:21.3156603Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T12:43:21.3156964Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-11-04T12:43:21.3157263Z ##[endgroup]
+2026-11-04T12:43:21.6033389Z test_bootstrap_no_backfill (test_paper_bot.PaperBotTests.test_bootstrap_no_backfill) ... ok
+2026-11-04T12:43:21.6040222Z test_gapped_history_halts (test_paper_bot.PaperBotTests.test_gapped_history_halts) ... ok
+2026-11-04T12:43:21.6044358Z test_indicators (test_paper_bot.PaperBotTests.test_indicators) ... ok
+2026-11-04T12:43:21.6045262Z test_initial_mode (test_paper_bot.PaperBotTests.test_initial_mode) ... ok
+2026-11-04T12:43:21.6049194Z test_risk_and_leverage (test_paper_bot.PaperBotTests.test_risk_and_leverage) ... ok
+2026-11-04T12:43:21.6050101Z test_stop_first_same_bar (test_paper_bot.PaperBotTests.test_stop_first_same_bar) ... ok
+2026-11-04T12:43:21.6056939Z test_provider_http200_error_401_fail_fast (test_v21_consolidation.DataValidationAdversarial.test_provider_http200_error_401_fail_fast) ... ok
+2026-11-04T12:43:21.6068995Z test_provider_http200_error_429_retried (test_v21_consolidation.DataValidationAdversarial.test_provider_http200_error_429_retried) ... ok
+2026-11-04T12:43:21.6070246Z test_retries_zero_rejected_cleanly (test_v21_consolidation.DataValidationAdversarial.test_retries_zero_rejected_cleanly) ... ok
+2026-11-04T12:43:21.6071475Z test_status_message_migrated_and_bad_type_rejected (test_v21_consolidation.DataValidationAdversarial.test_status_message_migrated_and_bad_type_rejected) ... ok
+2026-11-04T12:43:21.6081784Z test_tls_error_is_retried (test_v21_consolidation.DataValidationAdversarial.test_tls_error_is_retried) ... ok
+2026-11-04T12:43:21.6098635Z test_backup_is_exclusive (test_v21_consolidation.ManualRecoveryAdversarial.test_backup_is_exclusive) ... ok
+2026-11-04T12:43:21.6125973Z test_old_or_nonadvancing_snapshot_refuses_recovery (test_v21_consolidation.ManualRecoveryAdversarial.test_old_or_nonadvancing_snapshot_refuses_recovery) ... ok
+2026-11-04T12:43:21.6133860Z test_open_position_refuses_recovery (test_v21_consolidation.ManualRecoveryAdversarial.test_open_position_refuses_recovery) ... ok
+2026-11-04T12:43:21.6151942Z test_proposal_preserves_balance_trades_and_records_skip (test_v21_consolidation.ManualRecoveryAdversarial.test_proposal_preserves_balance_trades_and_records_skip) ... ok
+2026-11-04T12:43:21.6171457Z test_recovery_refuses_apply_to_repository_path (test_v21_consolidation.ManualRecoveryAdversarial.test_recovery_refuses_apply_to_repository_path) ... ok
+2026-11-04T12:43:21.6185452Z test_unresolved_gap_in_tail_refuses_recovery (test_v21_consolidation.ManualRecoveryAdversarial.test_unresolved_gap_in_tail_refuses_recovery) ... ok
+2026-11-04T12:43:21.6186836Z test_blocked_entry_emits_reason (test_v21_consolidation.StateAndRiskAdversarial.test_blocked_entry_emits_reason) ... ok
+2026-11-04T12:43:21.6196604Z test_daily_loss_guard_fails_but_allows_identical_positive_case (test_v21_consolidation.StateAndRiskAdversarial.test_daily_loss_guard_fails_but_allows_identical_positive_case) ... ok
+2026-11-04T12:43:21.6202591Z test_exact_boundary_entry_cannot_exit_on_same_bar (test_v21_consolidation.StateAndRiskAdversarial.test_exact_boundary_entry_cannot_exit_on_same_bar) ... ok
+2026-11-04T12:43:21.6218947Z test_idempotency_when_series_grows_then_repeats (test_v21_consolidation.StateAndRiskAdversarial.test_idempotency_when_series_grows_then_repeats) ... ok
+2026-11-04T12:43:21.6509666Z test_original_v2_encrypted_fixture_is_readable_and_migrates (test_v21_consolidation.StateAndRiskAdversarial.test_original_v2_encrypted_fixture_is_readable_and_migrates) ... ok
+2026-11-04T12:43:21.6511158Z test_public_summary_displays_individual_risk_excess (test_v21_consolidation.StateAndRiskAdversarial.test_public_summary_displays_individual_risk_excess) ... ok
+2026-11-04T12:43:21.6519329Z test_risk_is_near_budget_both_directions_for_unconstrained_case (test_v21_consolidation.StateAndRiskAdversarial.test_risk_is_near_budget_both_directions_for_unconstrained_case) ... ok
+2026-11-04T12:43:21.6530255Z test_http_429_retry_no_key_exposure (test_v21_hardening.DataFeedIntegrity.test_http_429_retry_no_key_exposure) ... ok
+2026-11-04T12:43:21.6533997Z test_invalid_json_retries_and_fails_closed (test_v21_hardening.DataFeedIntegrity.test_invalid_json_retries_and_fails_closed) ... ok
+2026-11-04T12:43:21.6537328Z test_nonretryable_http_403 (test_v21_hardening.DataFeedIntegrity.test_nonretryable_http_403) ... ok
+2026-11-04T12:43:21.6544447Z test_parse_provider_normalizes_reverse_chronology (test_v21_hardening.DataFeedIntegrity.test_parse_provider_normalizes_reverse_chronology) ... ok
+2026-11-04T12:43:21.6551490Z test_reject_conflicting_duplicate (test_v21_hardening.DataFeedIntegrity.test_reject_conflicting_duplicate) ... ok
+2026-11-04T12:43:21.6558708Z test_reject_nonfinite_and_invalid_range (test_v21_hardening.DataFeedIntegrity.test_reject_nonfinite_and_invalid_range) ... ok
+2026-11-04T12:43:21.6559590Z test_state_migrates_missing_gap_halt (test_v21_hardening.DataFeedIntegrity.test_state_migrates_missing_gap_halt) ... ok
+2026-11-04T12:43:21.6577636Z test_atomic_replace_failure_preserves_previous_state (test_v21_hardening.EncryptedStateIntegrity.test_atomic_replace_failure_preserves_previous_state) ... ok
+2026-11-04T12:43:21.6585936Z test_corrupt_state_raises_not_cleared (test_v21_hardening.EncryptedStateIntegrity.test_corrupt_state_raises_not_cleared) ... ok
+2026-11-04T12:43:21.7146628Z test_legacy_encryption_format_roundtrip (test_v21_hardening.EncryptedStateIntegrity.test_legacy_encryption_format_roundtrip) ... ok
+2026-11-04T12:43:21.7177230Z test_public_summary_omits_private_fields (test_v21_hardening.EncryptedStateIntegrity.test_public_summary_omits_private_fields) ... ok
+2026-11-04T12:43:21.7752838Z test_truncation_fails_closed_not_reinitialized (test_v21_hardening.EncryptedStateIntegrity.test_truncation_fails_closed_not_reinitialized) ... ok
+2026-11-04T12:43:21.7760473Z test_bootstrap_fails_closed_on_initial_gap (test_v21_hardening.PaperIntegrity.test_bootstrap_fails_closed_on_initial_gap) ... ok
+2026-11-04T12:43:21.7762031Z test_both_levels_touch_stop_first (test_v21_hardening.PaperIntegrity.test_both_levels_touch_stop_first) ... ok
+2026-11-04T12:43:21.7769772Z test_closed_bar_excludes_last_incomplete (test_v21_hardening.PaperIntegrity.test_closed_bar_excludes_last_incomplete) ... ok
+2026-11-04T12:43:21.7779103Z test_enter_only_after_new_closed_candle_and_fresh_quote (test_v21_hardening.PaperIntegrity.test_enter_only_after_new_closed_candle_and_fresh_quote) ... ok
+2026-11-04T12:43:21.7781029Z test_gap_exit_buy_marks_exceeded_risk (test_v21_hardening.PaperIntegrity.test_gap_exit_buy_marks_exceeded_risk) ... ok
+2026-11-04T12:43:21.7782650Z test_gap_exit_sell_marks_exceeded_risk (test_v21_hardening.PaperIntegrity.test_gap_exit_sell_marks_exceeded_risk) ... ok
+2026-11-04T12:43:21.7790152Z test_gap_halt_is_latched_despite_status_overwrite (test_v21_hardening.PaperIntegrity.test_gap_halt_is_latched_despite_status_overwrite) ... ok
+2026-11-04T12:43:21.7796752Z test_internal_history_gap_halts_before_processing (test_v21_hardening.PaperIntegrity.test_internal_history_gap_halts_before_processing) ... ok
+2026-11-04T12:43:21.7799945Z test_missing_weekend_bars_not_flagged_as_gap (test_v21_hardening.PaperIntegrity.test_missing_weekend_bars_not_flagged_as_gap) ... ok
+2026-11-04T12:43:21.7811098Z test_no_duplicate_candle_or_trade_on_rerun (test_v21_hardening.PaperIntegrity.test_no_duplicate_candle_or_trade_on_rerun) ... ok
+2026-11-04T12:43:21.7812815Z test_no_exit_from_opening_candle_full_ohlc (test_v21_hardening.PaperIntegrity.test_no_exit_from_opening_candle_full_ohlc) ... ok
+2026-11-04T12:43:21.7821367Z test_risk_precision_on_stop_and_lots_both_sides (test_v21_hardening.PaperIntegrity.test_risk_precision_on_stop_and_lots_both_sides) ... ok
+2026-11-04T12:43:21.7829476Z test_stale_quote_blocks_entry (test_v21_hardening.PaperIntegrity.test_stale_quote_blocks_entry) ... ok
+2026-11-04T12:43:21.7837714Z test_utc_day_limit_blocks_entry (test_v21_hardening.PaperIntegrity.test_utc_day_limit_blocks_entry) ... ok
+2026-11-04T12:43:21.7838432Z 
+2026-11-04T12:43:21.7838710Z ----------------------------------------------------------------------
+2026-11-04T12:43:21.7839206Z Ran 50 tests in 0.181s
+2026-11-04T12:43:21.7839410Z 
+2026-11-04T12:43:21.7839512Z OK
+2026-11-04T12:43:21.8093936Z Post job cleanup.
+2026-11-04T12:43:21.9245060Z (node:2437) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-04T12:43:21.9246808Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-04T12:43:21.9492496Z Post job cleanup.
+2026-11-04T12:43:22.0351675Z [command]/usr/bin/git version
+2026-11-04T12:43:22.0399370Z git version 2.56.0
+2026-11-04T12:43:22.0441180Z Temporarily overriding HOME='/home/runner/work/_temp/7ab97ce9-c5e2-47dc-b757-fcb8bf2bad23' before making global git config changes
+2026-11-04T12:43:22.0443002Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-04T12:43:22.0447423Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo
+2026-11-04T12:43:22.0488155Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-04T12:43:22.0531750Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-04T12:43:22.0860980Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-04T12:43:22.0895438Z http.https://github.com/.extraheader
+2026-11-04T12:43:22.0905965Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-04T12:43:22.0952478Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-04T12:43:22.1327433Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-04T12:43:22.1367475Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-04T12:43:22.1796552Z Cleaning up orphan processes
+2026-11-04T12:43:22.2195524Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+
+=============== FIM LOG ===============
+=============== INÍCIO v2/state.json (PÚBLICO) ===============
+{
+  "version": 2,
+  "mode": "PAPER_ONLY",
+  "source": "Twelve Data",
+  "pair": "EUR/USD",
+  "interval": "15min",
+  "initial_balance": 100,
+  "balance": 99.5,
+  "estimated_equity": 99.5,
+  "pnl_total": -0.5,
+  "closed_trades": 1,
+  "wins": 0,
+  "losses": 1,
+  "win_rate_pct": 0.0,
+  "max_closed_drawdown_pct": 0.5,
+  "max_risk_pct": 0.5,
+  "daily_loss_limit_pct": 2,
+  "open_position": false,
+  "position_side": null,
+  "status": "monitoring",
+  "message": "4 candles novos processados; simulação.",
+  "updated_at": "2026-11-04T11:40:00Z",
+  "last_checked_at": "2026-11-04T11:40:00Z",
+  "last_candle_at": "2026-11-04T11:15:00Z",
+  "equity_curve": [
+    {
+      "n": 0,
+      "balance": 100
+    },
+    {
+      "n": 1,
+      "balance": 99.5
+    }
+  ],
+  "closed_results": [
+    {
+      "at": "2026-11-04T07:30:00Z",
+      "side": "SELL",
+      "pnl": -0.5,
+      "reason": "STOP"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-11-04T07:30:00Z",
+      "message": "SELL closed STOP P/L -0.50"
+    },
+    {
+      "at": "2026-11-04T07:11:10Z",
+      "message": "SELL simulated 346 EUR, approx risk $0.50"
+    },
+    {
+      "at": "2026-11-04T03:12:55Z",
+      "message": "Initialized indicators; no historical trades."
+    }
+  ],
+  "notice": "Paper-only estimates. No orders, no real fills. Published metrics exclude raw market candles."
+}
+
+=============== FIM v2/state.json ===============
