@@ -133,8 +133,9 @@ def diagnose(runs, state, now):
             report["anomalies"].append({"type": "run_missing", "minutes": round(age, 2)})
     else:
         report["anomalies"].append({"type": "no_scheduled_runs_in_response"})
-    if state.get("open_position") not in (True, False):
+    if type(state.get("open_position")) is not bool:
         report["anomalies"].append({"type": "invalid_open_position_flag"})
+        report["anomalies"].append({"type": "position_state_unknown"})
     if state.get("mode") is None:
         report["anomalies"].append({"type": "missing_mode"})
     if state.get("pair") is None:
