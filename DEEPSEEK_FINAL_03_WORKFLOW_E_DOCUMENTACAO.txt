@@ -1,0 +1,331 @@
+FOREX BOT PRO V2.1 CONSOLIDADA — REAUDITORIA DEEPSEEK
+PARTE 3/5: GITHUB ACTIONS, SEGURANÇA E DOCUMENTAÇÃO
+Fonte: https://github.com/veloraspaces0/forex-bot-pro-v1-demo/tree/auditoria-v2-1-consolidada-2026-11-04
+
+
+=============== INÍCIO .github/workflows/forex-v2.yml ===============
+name: Forex Bot Pro V2 - Paper EURUSD
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 7 minutes after a 15-minute boundary, best-effort scheduler (UTC).
+    - cron: '7,22,37,52 * * * *'
+  push:
+    paths:
+      - 'v2/paper_bot.py'
+      - 'v2/runner.py'
+      - 'v2/recover_gap.py'
+      - 'tests/test_paper_bot.py'
+      - 'tests/test_v21_hardening.py'
+      - 'tests/test_v21_consolidation.py'
+      - '.github/workflows/forex-v2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependency for encrypted-state tests
+        run: python -m pip install 'cryptography>=43,<49'
+      - name: Paper engine and hardening tests (offline)
+        run: python -m unittest discover -s tests -v
+
+  paper:
+    # Feature branches are TEST-ONLY: never call the live provider and never
+    # mutate encrypted history or dashboard data from an audit/PR branch.
+    if: github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: forex-bot-pro-v2-main-state
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install encryption dependency
+        run: python -m pip install 'cryptography>=43,<49'
+      - name: Encrypted PAPER runner
+        env:
+          TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
+          V2_STATE_ENCRYPTION_KEY: ${{ secrets.V2_STATE_ENCRYPTION_KEY }}
+        run: python v2/runner.py
+      - name: Validate public dashboard schema and forbid private OHLC data
+        run: |
+          python - <<'PY'
+          import json
+          data=json.load(open('v2/state.json',encoding='utf-8'))
+          forbidden={'candles','last_quote','position','trades','apikey','entry','exit'}
+          assert not (forbidden & data.keys()), 'Sensitive fields in public dashboard'
+          assert data['mode']=='PAPER_ONLY' and data['pair']=='EUR/USD'
+          assert isinstance(data.get('closed_trades'),int)
+          print('Public dashboard validation succeeded')
+          PY
+      - name: Commit derived dashboard and encrypted state only
+        run: |
+          git add -- v2/state.enc v2/state.json
+          if git diff --cached --quiet; then
+            echo 'No changes to publish'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'data(v2): update encrypted paper state [skip ci]'
+          # Fail closed on a concurrent update: never force, never automatically
+          # rebase and overwrite newer encrypted state.
+          git push
+
+=============== FIM .github/workflows/forex-v2.yml ===============
+
+
+=============== INÍCIO .gitignore ===============
+# Protect private trading inputs and runtime artifacts
+.env
+.env.*
+v2/state.private.json
+v2/state.private.json.*
+__pycache__/
+*.pyc
+.pytest_cache/
+v2/*.tmp
+
+=============== FIM .gitignore ===============
+
+
+=============== INÍCIO README.md ===============
+# Forex Bot Pro V2 — EUR/USD, paper trading em nuvem
+
+**Estado:** V2 publicada no GitHub Pages. Execucao por GitHub Actions com cotacoes da Twelve Data; nenhuma ordem real ou conexao com corretora.
+
+## Links
+
+- [Painel V2 para iPhone](https://veloraspaces0.github.io/forex-bot-pro-v1-demo/)
+- [Workflow agendado](https://github.com/veloraspaces0/forex-bot-pro-v1-demo/actions/workflows/forex-v2.yml)
+- [Simulador V1 com dados sinteticos](https://veloraspaces0.github.io/forex-bot-pro-v1-demo/v1.html)
+
+No Safari: Compartilhar > Adicionar a Tela de Inicio.
+
+## Primeira ativacao
+
+O bot usa o secret **TWELVE_DATA_API_KEY**. Sem ele, nao consulta precos nem abre operacoes simuladas.
+
+1. Obtenha sua propria chave no site [Twelve Data](https://twelvedata.com/).
+2. No GitHub: Settings > Secrets and variables > Actions > New repository secret.
+3. Nome: **TWELVE_DATA_API_KEY**. Valor: sua chave privada. Nunca inclua a chave em commits, prints ou no chat.
+4. Abra Actions > Forex Bot Pro V2 - Paper EURUSD > Run workflow, ou aguarde o proximo ciclo.
+5. A primeira coleta apenas inicializa os indicadores, sem retroativamente criar trades.
+
+**Se o painel ja exibir MONITORANDO, o secret de dados esta operacional e nao e necessario configurar novamente.**
+
+## Funcionamento
+
+- EUR/USD, 15 minutos; a API deve autorizar esse par e intervalo no seu plano.
+- GitHub Actions tenta rodar nos minutos **07, 22, 37 e 52 UTC**, com possiveis atrasos/cancelamentos.
+- A V2 e um monitor agendado, **nao um servidor ininterrupto**, e nao deve ser usada para execucao real.
+- Capital virtual inicial: **US$ 100**. Risco nominal por trade: **0,5%** do saldo.
+- Bloqueio de novas entradas apos perda diaria de **2%** do patrimonio de referencia UTC.
+- Indicadores: EMA 9/21, RSI 14 e ATR 14. Stop: 1,5 ATR (minimo 3,5 pips). Alvo: 2 vezes a distancia do stop.
+- Apenas candles totalmente encerrados geram sinais; a primeira coleta nao cria trades passados.
+- Entrada paper estimada usando a ultima cotacao observada no momento do workflow, mais spread hipotetico fixo de 1,2 pip.
+- Saida paper por OHLC dos candles seguintes completos; se stop e alvo ocorrerem na mesma vela, assume-se stop primeiro.
+- Nao modela plenamente gaps, slippage, custos de operacao, cotacoes bid/ask reais ou a sequencia intrabar de precos.
+- Quando os dados ficarem antigos ou houver lacuna irrecuperavel de candles, o motor nao abre novas operacoes. Erros de API nao geram precos inventados.
+
+## Privacidade e permissao de uso dos dados
+
+O repositorio e publico. Os termos da Twelve Data limitam a redistribuicao de cotacoes: https://twelvedata.com/terms
+
+**Nao publicamos candles brutos.** O motor guarda OHLC e historico integral cifrados em `v2/state.enc` com AES-GCM; a interface GitHub Pages usa apenas `v2/state.json`, que mostra metricas derivadas, resultados paper sem precos de entrada/saida e estados operacionais.
+
+- O segredo de decriptacao padrao e derivado da chave `TWELVE_DATA_API_KEY`.
+- Pode-se configurar opcionalmente `V2_STATE_ENCRYPTION_KEY` antes do primeiro ciclo para manter o segredo de cifra independente da chave de API. **Nao mude o segredo de cifra depois de iniciado** sem migrar corretamente o arquivo cifrado, ou o bot nao conseguira retomar o historico.
+- O arquivo local `v2/state.private.json` deve ser ignorado pelo Git; o runner o apaga apos a coleta.
+- A publicacao da performance derivada nao garante que todos os usos de dados estejam autorizados; consulte as regras do provedor para sua finalidade e licenca.
+
+## Arquivos principais
+
+- `v2/paper_bot.py`: estrategia e gestao de risco.
+- `v2/runner.py`: coleta segura, encriptacao do historico e publicacao apenas de metricas derivadas.
+- `v2/state.enc`: estado privado cifrado.
+- `v2/state.json`: resumo publico para o painel.
+- `v2/index.html`: painel iPhone somente leitura.
+- `tests/test_paper_bot.py`: testes de risco, bootstrap, gaps e prioridade do stop.
+- `.github/workflows/forex-v2.yml`: rotina cloud com testes, cifragem, validacao de dados publicos e commit.
+
+`v2/run.py` e apenas um redirecionamento seguro para o runner cifrado. `v2/engine.py` existe como prototipo legado, mas **nao** e executado pelo workflow ativo.
+
+## Executar testes
+
+    python -m unittest discover -s tests -v
+
+A rotina cloud instala a dependencia `cryptography` para cifragem AES-GCM.
+
+**Aviso:** resultados historicos e simulados nao representam retorno futuro, nem demonstram que a estrategia seja lucrativa. Estimativas de fills paper podem ser significativamente diferentes da realidade.
+
+=============== FIM README.md ===============
+
+
+=============== INÍCIO README_V2_1.md ===============
+# Forex Bot Pro V2.1 — hardening candidate (PAPER ONLY)
+
+**Branch de desenvolvimento:** `forex-bot-pro-v2-1-hardening`. **Não mesclada na `main`.** A V2 continua em funcionamento sem mudanças até a aprovação dos testes.
+
+## O que mudou
+
+- **Persistência durável:** gravações atômicas (arquivo temporário no mesmo diretório, `fsync`, `os.replace`) de `v2/state.enc` e `v2/state.json`. Caso a substituição falhe, o estado anterior permanece intacto; ao reiniciar, corrupção do estado cifrado causa falha fechada, **sem reset automático**.
+- **Compatibilidade:** arquivo cifrado V2 ainda usa o mesmo cabeçalho `FX2`, PBKDF2 e AES-GCM; aceita o `\n` no final do arquivo legado. Novos campos no estado são adicionados sem alterar sua versão (`version=2`). Não altere `V2_STATE_ENCRYPTION_KEY` nem `TWELVE_DATA_API_KEY` sem migração da chave se os dados foram cifrados com ela.
+- **Robustez de dados:** valida preços e timestamps, rejeita cotações não finitas, OHLC incoerente e duplicatas conflitantes; realiza até 3 tentativas em 429/5xx e falhas de rede/JSON, com espera progressiva. Nunca replica preço inventado após erro.
+- **Idempotência:** só processa candles mais novos que `last_bar`; valida lacunas de 15 minutos **dentro** de todo o novo lote, e não apenas no início da série. Exclui os horários de fechamento regular do fim de semana FX (17h Nova York sexta a domingo); feriados e horários extraordinários exigem avaliação manual.
+- **Parada de segurança:** quando há candle ausente em horário negociável, `gap_halt=true` bloqueia novas decisões de forma persistente até a análise manual. Não se autocorrige silenciosamente nem reinicia o estado.
+- **Candle encerrado:** sinais são calculados apenas com candles que passaram do fechamento do intervalo de 15 minutos há 90 s. Entrada paper requer uma barra **atual** em formação, não um candle de preço antigo. Entradas em candle incompleto **não o usam para indicador**.
+- **Risco:** conserva capital virtual inicial US$100, EUR/USD, EMA 9/21, RSI 14, ATR 14, limite 0,5% e teto diário 2% (dia UTC), posição única, spread sintético 1,2 pip e limite de alavancagem 20x. O tamanho usa `min(balance,equity)` antes de dimensionar a operação; gaps podem exceder 0,5% e agora são sinalizados como `RISK_EXCEEDED`.
+- **GitHub Actions:** em branches não-main, executa **apenas testes offline**, sem acesso à API/segredos e sem gravar estado. Na main, a execução paper mantém `git push` sem força e falha se houver conflito. Nada publica dados brutos no painel.
+
+## Testes
+
+```
+python -m pip install 'cryptography>=43,<49'
+python -m unittest discover -s tests -v
+```
+
+A nova suíte usa respostas de API falsas, sem internet. Inclui retry 429, HTTP 403, JSON inválido, candles incompletos/duplicados, gaps de mercado, fim de semana, gap latch, STOP e gap BUY/SELL, prioridade do STOP, idempotência, estados cifrados V2 antigos, truncamento e atomicidade.
+
+## Limitações e precauções
+
+1. **Não é um robô de corretora** e não envia ordens reais. GitHub Actions roda de forma oportunista, não em 24/7 contínuo.
+2. Uma barra OHLC não contém a sequência intrabar; a V2.1 evita usar para a saída a barra em andamento no momento da entrada, mas **não modela o stop durante a parte restante dessa mesma barra**. Isso torna o paper trading impróprio para avaliar execução real.
+3. Spread fixo não representa spread real, slippage, swap, comissão, latência ou risco extremo de gap. O aviso `RISK_EXCEEDED` é observacional, **não limita artificialmente prejuízos**.
+4. A escolha da janela diária **continua em UTC** para preservar a regra de risco da V2 e não modificar o experimento em curso; não representa o dia da corretora (17h Nova York).
+5. Limites de 20x simulados não equivalem às regras de margem, tamanho mínimo e liquidação de uma corretora. Não use o protótipo para avaliar a viabilidade de operar US$100 em corretora específica.
+6. O segredo padrão de cifragem é derivado da API key Twelve Data quando `V2_STATE_ENCRYPTION_KEY` não está definido. Rotação da API key pode tornar o histórico ilegível; **não altere chaves sem migração separada e backup seguro**.
+7. O estado completo permanece cifrado em repositório público; a segurança depende da chave. Não forneça a chave a IAs, em chats, prints ou commits.
+8. A rotina detecta lacunas e **bloqueia**, não inventa candles, não completa feriados e não reprocessa trades antigos automaticamente. Recuperação exige auditoria do estado e dados originais.
+9. Dois arquivos atômicos **não são uma transação conjunta**. Se cair entre o commit do estado cifrado e o resumo público, o painel pode ficar desatualizado até a próxima execução. Uma persistência transacional real precisaria de backend/armazenamento apropriado.
+10. GitHub Pages pode falhar independentemente do robô; o histórico de ações mostrou HTTP 502 do provedor de deploy, sem evidência de falta de permissão.
+
+## Procedimento de promoção (não executado)
+
+1. Revisar diff/commits da branch; rodar testes no GitHub Actions e confirmar **success**.
+2. Fazer backup seguro do `v2/state.enc` e checar integridade do estado antes de tocar a main.
+3. Somente então decidir se cria PR/merge seletivo **dos arquivos de código e testes**, preservando sempre o estado vivo mais recente da main.
+4. Confirmar que o primeiro ciclo mantém saldo/histórico; acompanhar o painel e flags, com plano de rollback pronto.
+5. Reexecutar auditoria independente e testes prospectivos antes de pensar em qualquer execução real.
+
+**Não mescle o arquivo `v2/state.enc` nem `v2/state.json` da branch no repositório principal:** o estado da main evolui automaticamente. Ao mesclar, selecionar apenas código/testes/docs e proteger o estado vivo.
+
+## Consolidação pós-reauditoria (ainda candidata, sem mexer na main)
+
+- Testes offline adicionais em `tests/test_v21_consolidation.py` cobrem a migração sintética V2→V2.1 com **ciphertext gerado pelo formato original da V2**, idempotência com crescimento da série e repetição, limite diário com caso positivo e negativo, aproximação do orçamento de risco, borda de 15min, erros `HTTP 200 / status:error`, TLS e recuperação manual fail-closed.
+- A **compatibilidade do estado real de produção ainda exige prova privada**; uma fixture V2 sintética não é decifragem do estado operacional real.
+- Novo utilitário `v2/recover_gap.py` opera **offline, em cópia local**, dry-run por padrão, e exige backup novo externo ao repositório, motivo, reconhecimento de perda de continuidade e 40 candles recentes consecutivos para pular um gap sem criar trades. Ele **recusa posição aberta**. **Não realiza push GitHub nem limpa gap_halt automaticamente**.
+- O painel público passa a incluir `planned_risk_usd` e `risk_exceeded` por operação, além do contador geral. Dados privados de OHLC não são publicados.
+- Em `enter()`, se `gap_halt` impedir entrada, um evento explícito é registrado. A primeira barra elegível para saída será sempre **posterior** ao candle em que a entrada ocorreu (inclusive em entrada exatamente no limite de 15min).
+- Critério e procedimento de recuperação/promoção com cópias privadas: ver `RECUPERACAO_E_PROMOCAO_V21.md`.
+
+=============== FIM README_V2_1.md ===============
+
+
+=============== INÍCIO RECUPERACAO_E_PROMOCAO_V21.md ===============
+# V2.1 — recuperação manual de lacunas e promoção segura (PAPER ONLY)
+
+**Status: só branch de testes; este documento não é autorização de promover o robô.** O código **não** implementa trades reais, não envia ordens e não administra uma conta de corretora.
+
+## 1. Quando aparecer `data_gap` / `gap_halt=true`
+
+O robô interrompe novas simulações. Ele não inventa candles e **não retoma automaticamente**. Causas possíveis: falha do provedor, candle faltante, horário especial/feriado não modelado, atraso de GitHub Actions. Ao contrário de uma ordem real, stops são apenas simulados e ficam sem avaliação durante interrupções.
+
+1. Verifique o workflow e o timestamp do último candle público. Confira dados originais da Twelve Data e se existe uma **posição simulada aberta**. Se houver posição aberta, **NÃO** execute a recuperação: o resultado na lacuna é indeterminado, requer reconciliação manual independente e eventual encerramento do experimento; o utilitário recusa esse estado.
+2. **Pause as execuções paper na main** antes de preparar qualquer promoção/recuperação. Use um checkout/cópia local segura e **nunca modifique o arquivo remoto enquanto GitHub Actions puder gravá-lo**.
+3. Copie `v2/state.enc` da main para uma pasta privada fora do Git. Use somente sua chave já existente por variável de ambiente (seja `V2_STATE_ENCRYPTION_KEY` dedicada, seja a chave antiga Twelve Data que cifrava o estado); **não envie a chave nem o arquivo cifrado em chats**. Não faça rotação da chave durante o processo.
+4. Revise um JSON de `time_series` EUR/USD 15min, UTC, com OHLC originais suficientes para **40 candles consecutivos encerrados**, atualizados e válidos. Guarde esse JSON **fora do repositório**; jamais publique o campo `apikey` ou histórico OHLC bruto. Este procedimento exige **pelo menos 10 horas de histórico contínuo recente**, podendo precisar esperar após feriados/aberturas.
+5. Execute **primeiro em DRY-RUN**, com todos os caminhos em área privada:
+
+   ```bash
+   python v2/recover_gap.py --state /privado/copia/state.enc \
+     --snapshot /privado/cotacoes-revisadas.json \
+     --reason "Conferido feriado ou perda de coleta em simulacao"
+   ```
+
+6. Somente após concordar com a perda de continuidade do experimento, utilizar **offline**:
+
+   ```bash
+   python v2/recover_gap.py --state /privado/copia/state.enc \
+     --snapshot /privado/cotacoes-revisadas.json \
+     --reason "Conferido feriado ou perda de coleta em simulacao" \
+     --backup /privado/backups/state-ANTES-DA-RECUPERACAO.enc \
+     --acknowledge-skipped-paper-trades --apply \
+     --public /privado/copia/state.json
+   ```
+
+   O backup precisa ser **novo e fora do repositório**. O utilitário verifica a integridade da cifragem, rejeita posições abertas, candles não contíguos ou desatualizados, exige progresso do relógio, faz gravação atômica e registra `RECOVERY_GAP_SKIPPED` no histórico. Saldo/trades passados são preservados, mas **não há replay de candles perdidos nem imputação de stop**. Recomeça a observar novos candles; o intervalo pulado invalida a continuidade integral da amostra prospectiva.
+7. **Não há push automático:** qualquer substituição de estado na main exige revisão de backup, reconciliação do último commit remoto, desativação/pausa do workflow e procedimento operacional controlado. Não faça `git push --force` nem `rebase` automático para resolver conflitos. Se não puder auditar os dados, mantenha o bloqueio.
+
+## 2. Migração V2 → V2.1 antes de promoção
+
+- A fixture pública de teste `tests/fixtures/v2_legacy_synthetic_state.enc.txt` foi cifrada **pelo formato original da V2** com chave fictícia; ela valida compatibilidade do esquema antigo (`gap_halt` ausente) e o algoritmo PBKDF2/AES-GCM.
+- **Não comprova** que a V2.1 decifra o `state.enc` operacional **com a chave real**. Antes de alterar a main, faça um teste de decifragem somente em cópia privada: confira saldo, trades, posição, `last_bar` e eventos **sem expor valores ou arquivos**. Se falhar, **não promova**.
+- Preserve exatamente os secrets atuais. Se o estado V2 foi cifrado usando a chave da Twelve Data, introduzir uma nova `V2_STATE_ENCRYPTION_KEY` sem migração torna esse estado ilegível.
+- O artefato criptografado **da main** e o `state.json` público são dinâmicos; jamais mescle versões congeladas vindas de uma branch de testes.
+
+## 3. Promoção (ainda NÃO executada)
+
+- Inspecione o diff, confirme a suite offline no CI e revise os logs de `verify` com `paper=skipped` na branch.
+- Pause/suspenda de modo controlado o paper na main, guarde backup cifrado e verifique privadamente a compatibilidade real.
+- Promova **somente** código, testes, frontend e documentação, com `v2/state.enc` e `v2/state.json` mantidos da main. Não faça merge cego, porque a branch foi cortada de um estado anterior.
+- Nos primeiros ciclos, valide data da última execução, `balance`, `closed_trades`, `last_candle_at`, `gap_halt`, `risk_violations` e reconciliação dos eventos. Tenha rollback de código sem restaurar dados antigos por cima de novos.
+- Relate qualquer falha na coleta ou hiato, sem reconstituir ganhos e perdas ausentes artificialmente. Um resultado de paper não fornece garantia de desempenho real.
+
+## 4. Custo/modelo e limites
+
+A entrada ainda é simulada usando a última cotação recebida, spread fixo; custos, ordem intrabar e paradas instantâneas não são replicados. O horário do limite diário é **UTC** (herdado). A recuperação não resolve ausência de cotações, eventos de volatilidade, risco de execução nem gaps de mercado. O correto é registrar as limitações, não converter resultado simulado em expectativa de lucro.
+
+=============== FIM RECUPERACAO_E_PROMOCAO_V21.md ===============
+
+
+=============== INÍCIO LEIA_PRIMEIRO_V21_CONSOLIDADA.md ===============
+# Auditoria pós-consolidação V2.1 — snapshot de 04/11/2026
+
+## Proveniência
+
+- Código/testes na branch de desenvolvimento `forex-bot-pro-v2-1-consolidation`, commit **`7f2a5cfcf54741f784eb31eb943ee8b497dd9727`**.
+- Esta branch de **revisão somente** foi derivada desse commit. Dela removemos unicamente `v2/state.enc` e `v2/__pycache__/paper_bot.cpython-312.pyc`. **Não mesclar esta branch diretamente em `main`**, pois isso poderia apagar o estado cifrado vivo.
+- A versão V2 na `main` continua com código anterior e registros simulado intactos.
+
+## Evidências verificadas
+
+- Execução de CI GitHub Actions [41831696974](https://github.com/veloraspaces0/forex-bot-pro-v1-demo/actions/runs/41831696974), commit `7f2a5cfcf54741f784eb31eb943ee8b497dd9727`: job `verify` **success**, **50 testes passaram**, job `paper` **skipped** na branch.
+- Suíte executada também localmente com `python -m unittest discover -s tests -q`: **50 testes OK**.
+- A suíte testa: V2 legada sintética cifrada via PBKDF2/AES-GCM (chave de teste pública), risco em ambas direções, day-loss com caso elegível/não elegível, candles duplicados em rodadas com série crescente, entrada em fronteira exata, perda acima do risco com flag por trade, resposta HTTP 200 com erro de provedor, TLS, backup exclusivo e recuperação falha-fechada de gaps.
+- A fixture criptografada é **sintética**. Não demonstra que a V2.1 conseguiu decifrar o `state.enc` operacional da main com a chave real.
+
+## Novas proteções
+
+1. `v2/recover_gap.py` só executa **offline** em cópias fora do repositório, dry-run padrão e aplicação com backup inédito, reconhecimento do intervalo pulado e checagem dos últimos 40 candles concluídos e contínuos. Recusa posição simulada aberta e não faz push GitHub.
+2. `paper_bot.py` exige que uma barra seja posterior à entrada para avaliar saída, trata erros temporários HTTP 200/429/5xx ou TLS, protege estados antigos com flags e registra entradas recusadas por gap.
+3. `runner.py` usa writes atômicos para criptografia/summary, exporta `risk_exceeded` e `planned_risk_usd` por trade. O texto privado efêmero também é escrito atomicamente.
+4. `v2/index.html` indica risco ultrapassado em cada operação e evento `recovery_paused` com renderização segura `textContent`.
+5. Guia `RECUPERACAO_E_PROMOCAO_V21.md` define a recuperação que não cria trades retroativos e os cuidados para promoção preservando histórico cifrado.
+
+## Limitações explícitas
+
+- Nenhum teste prospectivo com API real foi realizado **pela V2.1 consolidada**; os 50 testes são offline.
+- A promoção à main ainda requer teste privado da decifragem do estado operacional, backup do blob cifrado, interrupção controlada dos jobs, mudança somente de arquivos de código/testes/docs e verificação dos primeiros ciclos.
+- O spread é constante, a janela de perda diária usa UTC, não há modelagem integral de liquidez/execução intrabar nem ordens reais.
+- Recuperar um gap saltando intervalo invalida a continuidade prospectiva do período pulado; esse fato é registrado e não se inventam resultados.
+- A V2 anterior permanece ativa na `main` até procedimento separado de promoção. Não comparar os snapshots herdados de `v2/state.json` com a execução V2.1, que ainda não existe.
+
+=============== FIM LEIA_PRIMEIRO_V21_CONSOLIDADA.md ===============
