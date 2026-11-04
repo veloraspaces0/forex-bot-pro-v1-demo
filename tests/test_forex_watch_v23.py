@@ -26,7 +26,10 @@ def state(age=4, candle_age=20, opened=False, now=NOW, **updates):
         "last_candle_at": stamp(candle_age, now),
         "open_position": opened, "position_side": "SELL" if opened else None,
         "status": "monitoring", "gap_halt": False, "balance": 99.5, "estimated_equity": 99.45,
-        "closed_trades": 1
+        "initial_balance": 100, "pnl_total": -0.55,
+        "closed_trades": 1, "wins": 0, "losses": 1,
+        "closed_results": [{"at": "2026-11-04T07:30:00Z", "side": "SELL", "pnl": -0.5}],
+        "equity_curve": [{"n": 0, "balance": 100}, {"n": 1, "balance": 99.5}]
     }
     result.update(updates)
     return result
