@@ -1,0 +1,6 @@
+# Dados privados da simulacao V2: NUNCA publicar
+v2/state.private.json
+v2/*.tmp
+__pycache__/
+*.pyc
+.env
