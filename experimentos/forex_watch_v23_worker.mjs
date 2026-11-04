@@ -201,6 +201,9 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
       if(token) headers.Authorization="Bearer "+token;
       const response=await fetcher(url,{headers,cache:"no-store",signal:controller.signal});
       if(response.ok){
+        const contentLength=Number(response.headers?.get?.("content-length"));
+        if(Number.isFinite(contentLength) && contentLength>MAX_API_BYTES)
+          throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
         const body=await response.text();
         if(body.length>MAX_API_BYTES) throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
         try{return JSON.parse(body);}
