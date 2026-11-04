@@ -66,14 +66,18 @@ def valid_age(now, stamp, report, field):
     return max(0.0, age)
 
 def diagnose(runs, state, now):
-    if now.tzinfo is None:
+    if not isinstance(runs, list) or not isinstance(state, dict):
+        raise ValueError("Invalid diagnostic input types")
+    if not isinstance(now, dt.datetime) or now.tzinfo is None:
         raise ValueError("now must be timezone-aware")
     now = now.astimezone(UTC)
+    if any(not isinstance(r, dict) for r in runs):
+        raise ValueError("Invalid workflow run item")
     scheduled = sorted(
         (r for r in runs if r.get("head_branch") == "main"
          and r.get("name") == "Forex Bot Pro V2 - Paper EURUSD"
          and r.get("event") == "schedule"),
-        key=lambda r: r["created_at"], reverse=True,
+        key=lambda r: parse_time(r["created_at"]), reverse=True,
     )
     report = {"checked_at_utc": now.isoformat(), "scheduled_runs": len(scheduled),
               "intervals_minutes": [], "anomalies": []}
