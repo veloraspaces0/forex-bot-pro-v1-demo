@@ -313,5 +313,11 @@ class V23CashConsistency(unittest.TestCase):
         self.assertIn("PUBLIC_HISTORY_INCONSISTENT",reasons(result))
         self.assertEqual(result["status"],"CRITICO")
 
+class V23FinalHardening(unittest.TestCase):
+    def test_updated_at_does_not_hide_missing_last_checked_at(self):
+        report = watch.assess(state(last_checked_at=None), runs(), NOW)
+        self.assertEqual(report["status"], "CRITICO")
+        self.assertIn("LAST_CHECK_MISSING", reasons(report))
+
 if __name__ == "__main__":
     unittest.main()
