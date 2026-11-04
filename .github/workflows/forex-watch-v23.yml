@@ -47,7 +47,7 @@ jobs:
         run: |
           for i in $(seq 1 50); do
             echo "HTTP 403 regression cycle $i/50"
-            node --test --test-name-pattern='HTTP 403 adversarial matrix|HTTP 403/429 fault injection|403 API rate limit exceeded body|oversized GitHub response|chunked oversized GitHub JSON|raw fallback rejects oversized|rate limit reset beyond retry budget|Retry-After above retry budget' tests/test_forex_watch_v23_worker.mjs > /tmp/watch-403-cycle.log 2>&1 || { echo "FAILED cycle $i/50"; cat /tmp/watch-403-cycle.log; exit 1; }
+            node --test --test-name-pattern='HTTP 403 adversarial matrix|HTTP 403/429 fault injection|403 API rate limit exceeded body|oversized GitHub response|chunked oversized GitHub JSON|raw fallback rejects oversized|rate limit reset beyond retry budget|Retry-After above retry budget|50 distinct long reset windows' tests/test_forex_watch_v23_worker.mjs > /tmp/watch-403-cycle.log 2>&1 || { echo "FAILED cycle $i/50"; cat /tmp/watch-403-cycle.log; exit 1; }
             echo "PASS cycle $i/50"
           done
           echo "PASS: all 50 offline HTTP 403 regression cycles completed"
