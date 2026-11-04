@@ -675,8 +675,10 @@ test("GitHub rate-limit 403 is distinguished from generic access-denied 403",asy
 });
 test("GitHub 403 never leaks token or error response body into incident",async()=>{
   const secret="TEST_FAKE_READ_ONLY_TOKEN";
-  const denied=async(_url,options)=>{
-    assert.equal(options.headers.Authorization,"Bearer "+secret);
+  const denied=async(url,options)=>{
+    if(String(url).startsWith("https://raw.githubusercontent.com/"))
+      assert.equal(options.headers.Authorization,undefined);
+    else assert.equal(options.headers.Authorization,"Bearer "+secret);
     return new Response("private response "+secret,{status:403});
   };
   const out=await runCheck({GITHUB_READ_TOKEN:secret},NOW,denied);
