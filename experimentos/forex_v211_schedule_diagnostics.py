@@ -5,10 +5,19 @@ import datetime as dt
 import json
 import sys
 import urllib.request
+import urllib.error
+from zoneinfo import ZoneInfo
 
 REPO = "veloraspaces0/forex-bot-pro-v1-demo"
 WORKFLOW = "forex-v2.yml"
 UTC = dt.timezone.utc
+NY = ZoneInfo("America/New_York")
+
+def forex_market_open(now):
+    """Approximate FX weekly session; Sunday 17:00 through Friday 17:00 NY."""
+    local = now.astimezone(NY)
+    weekday = local.weekday()
+    return weekday < 4 or (weekday == 4 and local.hour < 17) or (weekday == 6 and local.hour >= 17)
 
 def fetch_json(url):
     request = urllib.request.Request(url, headers={
@@ -165,7 +174,10 @@ def diagnose(runs, state, now):
         candle_age = valid_age(now, candle_at, report, "last_candle")
         report["last_candle_age_minutes"] = candle_age
         if candle_age is not None and candle_age > 45:
-            report["anomalies"].append({"type": "candle_stale", "minutes": candle_age})
+            if forex_market_open(now):
+                report["anomalies"].append({"type": "candle_stale", "minutes": candle_age})
+            else:
+                report["market_closed_candle_age_minutes"] = candle_age
     else:
         report["anomalies"].append({"type": "missing_last_candle_timestamp"})
     updated = state.get("last_checked_at") or state.get("updated_at")
@@ -224,7 +236,7 @@ def main():
         for anomaly in runs.get("pagination_anomalies", []):
             report["anomalies"].append({"type": "pagination_inconsistency", "reason": anomaly})
         print(json.dumps(report, indent=2, ensure_ascii=False))
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, urllib.error.URLError) as exc:
         print(f"VERIFICATION_FAILED: {exc}", file=sys.stderr)
         return 2
     return 0
