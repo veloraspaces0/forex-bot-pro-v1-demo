@@ -102,7 +102,7 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         self.assertIn("workflow_failure", {a["type"] for a in result["anomalies"]})
 
     def test_queued_run_is_not_success(self):
-        r = dict(run(5), status="queued", conclusion=None)
+        r = dict(run(25), status="queued", conclusion=None)
         result = diagnose([r], state(5), NOW)
         self.assertIn("run_not_completed", {a["type"] for a in result["anomalies"]})
 
@@ -321,6 +321,26 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         self.assertFalse(forex_market_open(dt.datetime(2026, 11, 7, 12, tzinfo=UTC)))
         self.assertTrue(forex_market_open(dt.datetime(2026, 11, 8, 22, tzinfo=UTC)))
         self.assertFalse(forex_market_open(dt.datetime(2026, 11, 6, 22, tzinfo=UTC)))
+
+
+    def test_recent_queued_run_has_grace_period(self):
+        r = dict(run(5), status="queued", conclusion=None)
+        result = diagnose([r], state(5), NOW)
+        self.assertNotIn("run_not_completed", {a["type"] for a in result["anomalies"]})
+
+    def test_historical_schedule_gaps_not_current_alerts(self):
+        result = diagnose([run(200), run(260)], state(5), NOW)
+        self.assertNotIn("schedule_interval", {a["type"] for a in result["anomalies"]})
+        self.assertIn("schedule_interval", {a["type"] for a in result["historical_anomalies"]})
+
+    def test_recent_schedule_gap_still_alerts(self):
+        result = diagnose([run(10), run(70)], state(5), NOW)
+        self.assertIn("schedule_interval", {a["type"] for a in result["anomalies"]})
+
+    def test_historical_failure_is_retained(self):
+        result = diagnose([run(5), run(180, "failure")], state(5), NOW)
+        self.assertNotIn("workflow_failure", {a["type"] for a in result["anomalies"]})
+        self.assertIn("workflow_failure", {a["type"] for a in result["historical_anomalies"]})
 
 if __name__ == "__main__":
     unittest.main()
