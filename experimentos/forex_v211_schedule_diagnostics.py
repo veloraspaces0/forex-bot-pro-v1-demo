@@ -108,10 +108,11 @@ def diagnose(runs, state, now):
         if r.get("status") in ("queued", "in_progress", "waiting", "pending", "requested"):
             report["anomalies"].append({"type": "run_not_completed", "run": r.get("html_url"),
                                         "status": r["status"]})
-        if r.get("conclusion") in ("failure", "cancelled", "timed_out", "action_required", "startup_failure"):
+        if r.get("conclusion") in ("failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale", "skipped"):
             report["anomalies"].append({"type": "workflow_failure", "run": r["html_url"],
                                         "conclusion": r["conclusion"]})
-    successful = [r for r in scheduled if r.get("conclusion") == "success"]
+    successful = [r for r in scheduled if r.get("conclusion") == "success"
+                  and r.get("status", "completed") == "completed"]
     if scheduled and not successful:
         report["anomalies"].append({"type": "no_successful_scheduled_runs"})
     if successful:
@@ -128,6 +129,8 @@ def diagnose(runs, state, now):
             report["anomalies"].append({"type": "run_missing", "minutes": round(age, 2)})
     else:
         report["anomalies"].append({"type": "no_scheduled_runs_in_response"})
+    if state.get("open_position") not in (True, False):
+        report["anomalies"].append({"type": "invalid_open_position_flag"})
     if state.get("mode") not in (None, "PAPER_ONLY"):
         report["anomalies"].append({"type": "unexpected_mode", "mode": state.get("mode")})
     if state.get("pair") not in (None, "EUR/USD"):
