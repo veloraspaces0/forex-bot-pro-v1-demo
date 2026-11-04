@@ -124,6 +124,67 @@ def valid_age(now, stamp, report, field):
         return None
     return max(0.0, age)
 
+def cron_slot_evidence(runs, now, lookback_minutes=120, tolerance_minutes=3):
+    """Read-only evidence of unmatched cron slots; NOT proof of skipped triggers.
+
+    A run may have been created late and be outside the matching tolerance.
+    Each observed run can match at most one slot.
+    """
+    if not isinstance(now, dt.datetime) or now.tzinfo is None or now.utcoffset() is None:
+        raise ValueError("now must be timezone-aware")
+    if type(lookback_minutes) is not int or not 15 <= lookback_minutes <= 1440:
+        raise ValueError("lookback_minutes must be 15..1440")
+    if type(tolerance_minutes) is not int or not 0 <= tolerance_minutes <= 7:
+        raise ValueError("tolerance_minutes must be 0..7")
+    now = now.astimezone(UTC)
+    lower = now - dt.timedelta(minutes=lookback_minutes)
+    # Do not classify slots that have not had a chance to arrive.
+    upper = now - dt.timedelta(minutes=tolerance_minutes)
+    hour = lower.replace(minute=0, second=0, microsecond=0)
+    slots = []
+    while hour <= upper:
+        for minute in (7, 22, 37, 52):
+            slot = hour + dt.timedelta(minutes=minute)
+            if lower <= slot <= upper:
+                slots.append(slot)
+        hour += dt.timedelta(hours=1)
+    candidates = []
+    for r in runs:
+        if r.get("head_branch") == "main" and r.get("event") == "schedule":
+            created = parse_time(r["created_at"])
+            if lower <= created <= now + dt.timedelta(minutes=2):
+                candidates.append((created, r))
+    # Match each slot to a unique nearest observed run, respecting tolerance.
+    matches = []
+    used = set()
+    unmatched = []
+    for slot in slots:
+        options = sorted(
+            ((abs((created - slot).total_seconds()), i, created, r)
+             for i, (created, r) in enumerate(candidates)
+             if i not in used and abs((created - slot).total_seconds()) <= tolerance_minutes * 60),
+            key=lambda x: (x[0], x[1]),
+        )
+        if options:
+            seconds, index, created, r = options[0]
+            used.add(index)
+            matches.append({"slot_utc": slot.isoformat(), "run_created_at": created.isoformat(),
+                            "offset_minutes": round((created - slot).total_seconds() / 60, 2),
+                            "run": r.get("html_url")})
+        else:
+            unmatched.append(slot.isoformat())
+    return {
+        "lookback_minutes": lookback_minutes,
+        "tolerance_minutes": tolerance_minutes,
+        "expected_slots": len(slots),
+        "matched_slots": len(matches),
+        "unmatched_slots": unmatched,
+        "matches": matches,
+        "unmatched_observed_runs": len(candidates) - len(used),
+        "interpretation": "Unmatched slots are evidence gaps, not proof GitHub omitted triggers.",
+    }
+
+
 def diagnose(runs, state, now):
     if not isinstance(runs, list) or not isinstance(state, dict):
         raise ValueError("Invalid diagnostic input types")
@@ -144,6 +205,7 @@ def diagnose(runs, state, now):
               "intervals_minutes": [], "anomalies": [], "historical_anomalies": [],
               "recent_schedule_gaps": []}
     recent_cutoff = now - dt.timedelta(hours=2)
+    report["cron_slot_evidence"] = cron_slot_evidence(scheduled, now)
     report["recent_scheduled_runs"] = sum(parse_time(r["created_at"]) >= recent_cutoff for r in scheduled)
     report["historical_scheduled_runs"] = len(scheduled) - report["recent_scheduled_runs"]
     report["queue_delays_minutes"] = []
