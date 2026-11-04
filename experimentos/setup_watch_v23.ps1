@@ -41,12 +41,12 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "Testes offline falharam. Implantacao bloqueada." }
 
   Write-Host "Autorizacao Cloudflare: use o navegador para entrar na SUA conta."
-  Invoke-Checked @("wrangler","login")
+  Invoke-Checked -Arguments @("wrangler","login")
 
   $toml = Get-Content -Raw -Encoding UTF8 $Config
   if ($toml -notmatch '(?m)^\[\[kv_namespaces\]\]') {
     Write-Host "Criando namespace KV e adicionando binding INCIDENT_KV..."
-    Invoke-Checked @("wrangler","kv","namespace","create","INCIDENT_KV","--binding","INCIDENT_KV","--config",$Config,"--update-config")
+    Invoke-Checked -Arguments @("wrangler","kv","namespace","create","INCIDENT_KV","--binding","INCIDENT_KV","--config",$Config,"--update-config")
   }
 
   if (-not $Activate) {
@@ -56,7 +56,7 @@ try {
       $current = $current -replace 'ALERT_MODE\s*=\s*"active"','ALERT_MODE = "observe"'
       [System.IO.File]::WriteAllText($Config,$current,(New-Object System.Text.UTF8Encoding($false)))
     }
-    Invoke-Checked @("wrangler","deploy","--config",$Config)
+    Invoke-Checked -Arguments @("wrangler","deploy","--config",$Config)
     Write-Host "Publicado em OBSERVE. Proxima etapa: crie bot Telegram e Healthchecks.io."
     Write-Host "Depois execute este script com -Activate, sem compartilhar secrets."
     exit 0
@@ -76,14 +76,14 @@ try {
       $current -notmatch 'ALERT_MODE\s*=\s*"active"') {
     throw "ALERT_MODE nao encontrado no arquivo Wrangler."
   }
-  Invoke-Checked @("wrangler","secret","put","TELEGRAM_BOT_TOKEN","--config",$Config)
-  Invoke-Checked @("wrangler","secret","put","TELEGRAM_CHAT_ID","--config",$Config)
-  Invoke-Checked @("wrangler","secret","put","MONITOR_HEARTBEAT_URL","--config",$Config)
+  Invoke-Checked -Arguments @("wrangler","secret","put","TELEGRAM_BOT_TOKEN","--config",$Config)
+  Invoke-Checked -Arguments @("wrangler","secret","put","TELEGRAM_CHAT_ID","--config",$Config)
+  Invoke-Checked -Arguments @("wrangler","secret","put","MONITOR_HEARTBEAT_URL","--config",$Config)
 
   $current = Get-Content -Raw -Encoding UTF8 $Config
   $current = $current -replace 'ALERT_MODE\s*=\s*"observe"','ALERT_MODE = "active"'
   [System.IO.File]::WriteAllText($Config,$current,(New-Object System.Text.UTF8Encoding($false)))
-  Invoke-Checked @("wrangler","deploy","--config",$Config)
+  Invoke-Checked -Arguments @("wrangler","deploy","--config",$Config)
   Write-Host "Cloudflare: alertas HABILITADOS na configuracao."
   Write-Host "IMPORTANTE: valide teste real de Telegram e Healthchecks antes de considerar monitor operacional."
 }
