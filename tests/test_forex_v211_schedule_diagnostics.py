@@ -643,5 +643,18 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         self.assertEqual(result["invalid_queue_timestamp_count"], 1)
         self.assertEqual(result["queue_delay_sample_count"], 0)
 
+
+    def test_operational_health_degraded_for_scheduler_gap(self):
+        report = diagnose([run(5), run(65)], state(5), NOW)
+        self.assertEqual(report["operational_health"], "degraded")
+
+    def test_operational_health_degraded_for_missing_runs(self):
+        report = diagnose([], state(5), NOW)
+        self.assertEqual(report["operational_health"], "degraded")
+
+    def test_operational_health_unverified_for_incomplete_state(self):
+        report = diagnose([run(5), run(20)], state(5), NOW)
+        self.assertEqual(report["operational_health"], "unverified")
+
 if __name__ == "__main__":
     unittest.main()
