@@ -137,6 +137,14 @@ def diagnose(runs, state, now):
         report["anomalies"].append({"type": "unexpected_pair", "pair": state.get("pair")})
     if isinstance(state.get("risk_violations"), (int, float)) and state["risk_violations"] > 0:
         report["anomalies"].append({"type": "risk_violations", "count": state["risk_violations"]})
+    candle_at = state.get("last_candle_at")
+    if candle_at:
+        candle_age = valid_age(now, candle_at, report, "last_candle")
+        report["last_candle_age_minutes"] = candle_age
+        if candle_age is not None and candle_age > 45:
+            report["anomalies"].append({"type": "candle_stale", "minutes": candle_age})
+    else:
+        report["anomalies"].append({"type": "missing_last_candle_timestamp"})
     updated = state.get("last_checked_at") or state.get("updated_at")
     if updated:
         age = valid_age(now, updated, report, "state")
