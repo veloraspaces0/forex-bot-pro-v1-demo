@@ -1,196 +1,138 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0b1220">
-<title>Forex Bot Pro V2 | EUR/USD Paper Trading</title>
+<title>Forex Bot Pro V2 | Paper Trading EUR/USD</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;color-scheme:dark;color:#e8eef8;background:#0b1220}
-*{box-sizing:border-box}body{margin:0}main{max-width:1180px;margin:auto;padding:22px}
-a{color:#9abfff;text-decoration:none}a:hover{text-decoration:underline}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
-h1{font-size:clamp(23px,4vw,31px);letter-spacing:-.6px;margin:0}
-h2{font-size:17px;margin:0 0 16px}
-.sub{color:#9aabc5;font-size:13px;margin-top:7px}
-.pill{display:inline-flex;align-items:center;padding:8px 12px;border:1px solid #2e455d;background:#16263c;border-radius:999px;font-size:12px;font-weight:750}
-.pill.ok{color:#7de6b7;border-color:#245e4e}.pill.warn{color:#f6cf82;border-color:#7c6037}.pill.err{color:#ff9ea7;border-color:#8a3b4a}
-button{background:#375df4;color:white;border:0;border-radius:9px;padding:11px 14px;font-weight:700;cursor:pointer}
-.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.notice{background:#202a3e;border:1px solid #455a77;padding:15px 17px;border-radius:13px;margin:15px 0;color:#dce7f7;font-size:13px;line-height:1.65}
-.notice strong{color:#fff}
-.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
-.card,.panel{background:#131f32;border:1px solid #2a3a52;border-radius:15px;padding:17px;min-width:0}
-.card small{display:block;color:#a7b7cf;font-size:12px;margin-bottom:11px}
-.big{font-size:clamp(20px,2.8vw,27px);font-weight:760;letter-spacing:-.5px;white-space:nowrap}
-.pos{color:#76e6b4}.neg{color:#ff8e9a}
-.grid{display:grid;grid-template-columns:1.8fr 1fr;gap:12px;margin-top:12px}
-.panel{margin-top:12px}
-canvas{width:100%;height:310px;display:block;border-radius:9px;background:#10192a}
-.kv{display:grid;grid-template-columns:1fr auto;gap:12px;padding:10px 0;border-bottom:1px solid #2b3950;font-size:13px}
-.kv span:first-child{color:#aab9d0}.kv b{text-align:right;overflow-wrap:anywhere}
-.scroll{overflow-x:auto}
-table{width:100%;border-collapse:collapse;white-space:nowrap;font-size:12px}
-th,td{text-align:left;padding:12px 10px;border-bottom:1px solid #2a3950}
-th{color:#9eafc8;font-weight:650}
-.empty{color:#9eb0c9;font-size:13px;padding:12px 0}
-.events{max-height:190px;overflow:auto;font-size:13px}
-.event{padding:9px 0;border-bottom:1px solid #29374e}
-footer{font-size:12px;color:#9aacc5;line-height:1.7;margin:20px 0 5px}
-@media(max-width:820px){main{padding:13px}.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}.big{font-size:22px}canvas{height:260px}}
-@media(max-width:360px){.cards{grid-template-columns:1fr}.big{font-size:24px}}
+*{box-sizing:border-box}body{margin:0}main{max-width:1100px;margin:auto;padding:16px}
+a{color:#a6c6ff}header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+h1{font-size:clamp(24px,5vw,30px);letter-spacing:-.5px;margin:4px 0}h2{font-size:17px;margin:0 0 16px}
+.sub{color:#9baac1;font-size:13px;margin:5px 0 0}
+.pill{border:1px solid #456281;border-radius:999px;padding:9px 11px;font-size:12px;font-weight:700;color:#efce85;background:#243047}
+.pill.ok{color:#7ae0b5;border-color:#2f7c5c}.pill.err{color:#ff9b9b;border-color:#854258}
+button{border:0;background:#416af1;color:#fff;border-radius:10px;padding:11px 17px;font-weight:bold;cursor:pointer}
+.controls{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+.notice,.panel,.metric{border:1px solid #30415a;background:#152135;border-radius:14px;padding:16px}
+.notice{margin:16px 0;line-height:1.6;font-size:13px}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.metric small{font-size:12px;color:#a8b7d0}.value{font-size:clamp(19px,3vw,27px);font-weight:750;margin-top:11px}
+.pos{color:#7cdeaf}.neg{color:#ff8d99}
+.grid{display:grid;grid-template-columns:1.7fr 1fr;gap:12px;margin-top:12px}
+.panel{margin-top:12px;min-width:0}
+canvas{display:block;width:100%;height:270px;background:#111b2d;border-radius:9px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:10px;padding:10px 0;border-bottom:1px solid #2d3b53;font-size:13px}
+.kv span{color:#a3b3cb}.kv b{text-align:right;overflow-wrap:anywhere}
+.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%;white-space:nowrap;font-size:12px}
+th,td{text-align:left;padding:11px 10px;border-bottom:1px solid #2c3b54}
+th{color:#a4b5cf}.events{max-height:240px;overflow:auto}.event{border-bottom:1px solid #2c3b54;padding:10px 0;font-size:13px}
+footer{line-height:1.65;color:#9eaec7;font-size:12px;margin:24px 0}
+@media(max-width:740px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}canvas{height:240px}}
+@media(max-width:355px){.metrics{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <main>
 <header>
-  <div><h1>Forex Bot Pro <span style="color:#91b2ff">V2</span></h1>
-    <div class="sub">EUR/USD · 15 min · Mercado real, ordens 100% simuladas</div></div>
-  <div class="controls"><span id="statusPill" class="pill warn">Aguardando dados</span>
-    <button id="refresh" type="button">Atualizar</button></div>
+ <div><h1>Forex Bot Pro <span style="color:#9ebeff">V2</span></h1><div class="sub">EUR/USD · 15 minutos · Preços reais para simulação · Sem corretora</div></div>
+ <div class="controls"><span class="pill" id="status">AGUARDANDO API</span><button id="refresh" type="button">Atualizar</button></div>
 </header>
-<div id="notice" class="notice"><strong>Paper trading:</strong> sem corretora, sem ordens reais e sem uso de dinheiro. Aguardando estado do GitHub.</div>
-<section class="cards" aria-label="Indicadores de saldo">
-  <div class="card"><small>Saldo realizado</small><div class="big" id="balance">US$ 100,00</div></div>
-  <div class="card"><small>Patrimônio estimado</small><div class="big" id="equity">US$ 100,00</div></div>
-  <div class="card"><small>Resultado simulado</small><div class="big" id="pnl">US$ 0,00</div></div>
-  <div class="card"><small>Trades fechados / acerto</small><div class="big" id="trades">0 / 0%</div></div>
-</section>
+<div class="notice" id="notice">O robô simula operações com dados da Twelve Data. Nenhuma ordem real é enviada.</div>
+<div class="metrics">
+ <div class="metric"><small>Saldo realizado</small><div class="value" id="balance">US$ 100,00</div></div>
+ <div class="metric"><small>Patrimônio estimado</small><div class="value" id="equity">US$ 100,00</div></div>
+ <div class="metric"><small>Resultado simulado</small><div class="value" id="pnl">US$ 0,00</div></div>
+ <div class="metric"><small>Operações / acerto</small><div class="value" id="trades">0 / 0%</div></div>
+</div>
 <div class="grid">
-  <section class="panel">
-    <h2>Candles EUR/USD (15 minutos)</h2>
-    <canvas id="chart" width="960" height="350" role="img" aria-label="Gráfico de candles EUR/USD"></canvas>
-    <div id="chartInfo" class="sub">Sem preços disponíveis. Nenhum preço será inventado.</div>
-  </section>
-  <aside class="panel">
-    <h2>Gestão de risco</h2>
-    <div class="kv"><span>Capital inicial</span><b>US$ 100,00</b></div>
-    <div class="kv"><span>Risco planejado / operação</span><b>0,5%</b></div>
-    <div class="kv"><span>Limite diário (novas entradas)</span><b>2%</b></div>
-    <div class="kv"><span>Spread hipotético</span><b>1,2 pip</b></div>
-    <div class="kv"><span>Alavancagem máxima simulada</span><b>20x</b></div>
-    <div class="kv"><span>Fonte</span><b>Twelve Data</b></div>
-    <div class="kv"><span>Último candle fechado</span><b id="lastCandle">—</b></div>
-    <div class="kv"><span>Última consulta</span><b id="lastCheck">—</b></div>
-    <div class="kv"><span>Operação em aberto</span><b id="position">Nenhuma</b></div>
-    <div class="kv"><span>Sinal pendente</span><b id="pending">Nenhum</b></div>
-    <div class="kv"><span>Falhas/intervalos de candles</span><b id="gaps">0</b></div>
-  </aside>
+ <section class="panel">
+  <h2>Evolução do saldo realizado (USD)</h2>
+  <canvas id="chart" width="900" height="350" aria-label="Curva de saldo das operações fechadas"></canvas>
+  <p class="sub">O painel publica apenas métricas de simulação. As cotações brutas ficam protegidas.</p>
+ </section>
+ <aside class="panel">
+  <h2>Controle de risco</h2>
+  <div class="kv"><span>Capital inicial</span><b>US$ 100,00</b></div>
+  <div class="kv"><span>Risco planejado por operação</span><b>0,5%</b></div>
+  <div class="kv"><span>Perda diária máxima para novas entradas</span><b>2%</b></div>
+  <div class="kv"><span>Fonte</span><b>Twelve Data</b></div>
+  <div class="kv"><span>Último candle fechado (UTC)</span><b id="candle">—</b></div>
+  <div class="kv"><span>Última consulta (UTC)</span><b id="checked">—</b></div>
+  <div class="kv"><span>Posição simulada</span><b id="position">Nenhuma</b></div>
+  <div class="kv"><span>Drawdown realizado máximo</span><b id="drawdown">0%</b></div>
+ </aside>
 </div>
 <section class="panel">
-  <h2>Histórico de operações simuladas</h2>
-  <div class="scroll"><table><thead><tr><th>Entrada UTC</th><th>Tipo</th><th>EUR</th><th>Entrada</th><th>Saída</th><th>Motivo</th><th>P/L USD</th></tr></thead><tbody id="tradeRows"></tbody></table></div>
-  <div id="emptyTrades" class="empty">Nenhuma operação registrada.</div>
+ <h2>Histórico de resultados simulados</h2>
+ <div class="scroll"><table><thead><tr><th>Encerramento (UTC)</th><th>Lado</th><th>Motivo</th><th>Resultado USD</th></tr></thead><tbody id="results"><tr><td colspan="4">Sem operações encerradas.</td></tr></tbody></table></div>
 </section>
-<section class="panel">
-  <h2>Eventos do robô</h2><div class="events" id="events"><div class="empty">Sem eventos.</div></div>
-</section>
-<footer>
-  A V2 consulta candles de mercado da Twelve Data por GitHub Actions aproximadamente a cada 15 minutos, sujeito a atrasos e indisponibilidade.
-  O preço de entrada, spread, stop, alvo e execução são estimativas de paper trading, não cotações executáveis de uma corretora.
-  Candles podem ser atrasados. Custos, swaps, slippage real e liquidez não são modelados integralmente; perdas podem exceder o risco planejado.
-  O desempenho não garante lucros futuros. <a href="../v1.html">Abrir simulador V1 (dados artificiais)</a> ·
-  <a href="https://github.com/veloraspaces0/forex-bot-pro-v1-demo/actions/workflows/forex-v2.yml">Ver execuções no GitHub</a>
-</footer>
+<section class="panel"><h2>Eventos</h2><div id="events" class="events">Sem eventos até o momento.</div></section>
+<footer>Simulação experimental sem ordens reais. Execuções programadas pelo GitHub podem atrasar. Preços históricos da Twelve Data não equivalem a preços executáveis. Spread hipotético e ausência de custos reais, latência, swaps e deslizamento podem distorcer resultados. Os limites de risco são planejados, não garantidos. Não é promessa de lucro. <a href="../v1.html">Simulador V1</a> · <a href="https://github.com/veloraspaces0/forex-bot-pro-v1-demo/actions/workflows/forex-v2.yml">Execuções no GitHub</a></footer>
 </main>
 <script>
 "use strict";
-const $ = (id) => document.getElementById(id);
-const money = (n) => "US$ " + Number(n).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
-const num = (n,d=5) => Number(n).toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d});
-const time = (s) => s ? s.replace("T"," ").replace("Z"," UTC") : "—";
-const set = (id,value) => { $(id).textContent=value; };
-const textCell = (row, value, cls) => { const td=document.createElement("td");td.textContent=String(value);if(cls)td.className=cls;row.appendChild(td); };
-function draw(candles) {
-  const cv=$("chart"),ctx=cv.getContext("2d"),w=cv.width,h=cv.height;
-  ctx.fillStyle="#10192a";ctx.fillRect(0,0,w,h);
-  const data=candles.slice(-65);
-  if(!data.length){ctx.fillStyle="#aab9d0";ctx.font="20px system-ui";ctx.fillText("Aguardando candles reais",30,60);return;}
-  const low=Math.min(...data.map(c=>c.low)),high=Math.max(...data.map(c=>c.high));
-  const margin=Math.max((high-low)*.12,.0001),lo=low-margin,hi=high+margin;
-  const y=(v)=>20+(hi-v)/(hi-lo)*(h-45);
-  ctx.font="14px system-ui";
-  for(let i=0;i<=4;i++){
-    const yy=20+i*(h-45)/4;
-    ctx.strokeStyle="#26364e";ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(w,yy);ctx.stroke();
-    ctx.fillStyle="#9aacc6";ctx.fillText((hi-(hi-lo)*i/4).toFixed(5),10,yy-5);
-  }
-  const dx=w/data.length;
-  data.forEach((c,i)=>{
-    const x=(i+.5)*dx,up=c.close>=c.open;
-    ctx.fillStyle=ctx.strokeStyle=up?"#65dfb3":"#ff8797";
-    ctx.beginPath();ctx.moveTo(x,y(c.high));ctx.lineTo(x,y(c.low));ctx.stroke();
-    const top=y(Math.max(c.open,c.close)),bottom=y(Math.min(c.open,c.close));
-    ctx.fillRect(x-Math.max(2,dx*.28),top,Math.max(3,dx*.56),Math.max(2,bottom-top));
-  });
+const $=id=>document.getElementById(id);
+const usd=n=>"US$ "+Number(n).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const tm=x=>x?String(x).replace("T"," ").replace("Z"," UTC"):"—";
+const set=(id,x)=>{$(id).textContent=String(x)};
+function chart(curve) {
+ const cv=$("chart"),c=cv.getContext("2d"),w=cv.width,h=cv.height;
+ c.fillStyle="#111b2d";c.fillRect(0,0,w,h);
+ const data=(Array.isArray(curve)?curve:[]).filter(p=>Number.isFinite(Number(p.balance)));
+ if(!data.length){c.fillStyle="#9aabc5";c.font="20px sans-serif";c.fillText("Aguardando resultados",25,45);return}
+ const ys=data.map(p=>Number(p.balance));let lo=Math.min(...ys),hi=Math.max(...ys);
+ const pad=Math.max((hi-lo)*.18,.5);lo-=pad;hi+=pad;
+ const y=v=>25+(hi-v)/(hi-lo)*(h-55);
+ c.font="14px sans-serif";c.lineWidth=1;
+ for(let i=0;i<5;i++){const yy=25+i*(h-55)/4;c.strokeStyle="#2b3a55";c.beginPath();c.moveTo(0,yy);c.lineTo(w,yy);c.stroke();c.fillStyle="#a7b7d0";c.fillText((hi-(hi-lo)*i/4).toFixed(2),8,yy-5)}
+ const left=80,right=w-15;
+ c.strokeStyle=ys.at(-1)>=ys[0]?"#6ed5ab":"#ff8f9d";c.lineWidth=3;c.beginPath();
+ data.forEach((p,i)=>{const x=data.length===1?left:left+(right-left)*i/(data.length-1);i===0?c.moveTo(x,y(Number(p.balance))):c.lineTo(x,y(Number(p.balance)))});c.stroke();
 }
-function show(state){
-  const candles=Array.isArray(state.candles)?state.candles:[];
-  const trades=Array.isArray(state.trades)?state.trades:[];
-  const pos=state.position;
-  const mid=candles.length?Number(candles[candles.length-1].close):null;
-  let eq=Number(state.balance);
-  if(pos && mid!==null){
-    const exit=mid+(pos.side==="BUY" ? -.00006:.00006);
-    eq+=(exit-Number(pos.entry))*Number(pos.units)*(pos.side==="BUY"?1:-1);
-  }
-  const pnl=eq-Number(state.initial_balance);
-  const wins=trades.filter(t=>Number(t.pnl)>0).length;
-  set("balance",money(state.balance));set("equity",money(eq));
-  set("pnl",(pnl>0?"+":"")+money(pnl));
-  $("pnl").className="big "+(pnl>=0?"pos":"neg");
-  set("trades",trades.length+" / "+(trades.length?(100*wins/trades.length).toFixed(1):"0")+"%");
-  set("lastCandle",time(state.last_candle));set("lastCheck",time(state.last_check_utc));
-  set("position",pos?pos.side+" "+pos.units+" EUR":"Nenhuma");
-  set("pending",state.pending?state.pending.side+" (próx. vela)":"Nenhum");
-  set("gaps",state.missed_intervals||0);
-  set("chartInfo",mid!==null?"Último fechamento recebido: "+num(mid)+" · "+time(state.last_candle)+" · "+candles.length+" candles guardados":"Sem preços disponíveis. Nenhum preço será inventado.");
-  const status=state.status||"DESCONHECIDO";
-  const ok=status==="MONITORANDO";
-  const err=status==="ERRO_API";
-  const pill=$("statusPill");pill.className="pill "+(ok?"ok":err?"err":"warn");
-  pill.textContent=ok?"● MONITORANDO":err?"● ERRO DE DADOS":"● "+status.replaceAll("_"," ");
-  let message="<strong>Modo PAPER:</strong> preços reais somente quando recebidos da Twelve Data; nenhuma ordem é enviada a uma corretora.";
-  if(status==="AGUARDANDO_API")message="<strong>Ativação pendente:</strong> adicione a chave Twelve Data como segredo TWELVE_DATA_API_KEY no GitHub Actions. Até lá, nenhuma cotação ou operação é criada.";
-  else if(err)message="<strong>Falha segura:</strong> a API não forneceu dados válidos. O robô não inventa preços. "+String(state.error||"");
-  else if(status==="DADOS_ATRASADOS_OU_MERCADO_FECHADO")message="<strong>Dados antigos ou mercado fechado:</strong> a última vela pode não refletir o preço atual. Não use como cotação ao vivo.";
-  // Apenas mensagens fixas; erro da API em texto puro para evitar injeção HTML.
-  if(err){$("notice").innerHTML="<strong>Falha segura:</strong> dados indisponíveis. ";$("notice").appendChild(document.createTextNode(String(state.error||"")));}
-  else $("notice").innerHTML=message;
-  const tbody=$("tradeRows");tbody.replaceChildren();
-  trades.slice(-25).reverse().forEach(t=>{
-    const tr=document.createElement("tr");
-    textCell(tr,time(t.entry_time));textCell(tr,t.side);textCell(tr,t.units);
-    textCell(tr,num(t.entry));textCell(tr,num(t.exit));textCell(tr,t.reason);
-    textCell(tr,(t.pnl>=0?"+":"")+money(t.pnl),t.pnl>=0?"pos":"neg");
-    tbody.appendChild(tr);
-  });
-  $("emptyTrades").style.display=trades.length?"none":"block";
-  const events=$("events");events.replaceChildren();
-  const evs=Array.isArray(state.events)?state.events.slice(-15).reverse():[];
-  if(!evs.length){const d=document.createElement("div");d.className="empty";d.textContent="Sem eventos.";events.appendChild(d);}
-  evs.forEach(e=>{const d=document.createElement("div");d.className="event";d.textContent=(e.at?time(e.at)+" · ":"")+e.message;events.appendChild(d);});
-  draw(candles);
+function row(values){
+ const tr=document.createElement("tr");values.forEach((v,i)=>{const td=document.createElement("td");td.textContent=String(v);if(i===3&&Number(String(v).replace(/[^0-9.-]/g,""))<0)td.className="neg";tr.appendChild(td)});return tr;
 }
-let loading=false;
+function show(s){
+ set("balance",usd(s.balance));
+ set("equity",usd(s.estimated_equity??s.balance));
+ set("pnl",(Number(s.pnl_total)>0?"+":"")+usd(s.pnl_total??0));
+ $("pnl").className="value "+(Number(s.pnl_total)>=0?"pos":"neg");
+ set("trades",Number(s.closed_trades||0)+" / "+Number(s.win_rate_pct||0).toLocaleString("pt-BR")+"%");
+ set("candle",tm(s.last_candle_at));set("checked",tm(s.last_checked_at));
+ set("position",s.open_position?(s.position_side||"Aberta"):"Nenhuma");
+ set("drawdown",Number(s.max_closed_drawdown_pct||0).toLocaleString("pt-BR")+"%");
+ const status=String(s.status||"desconhecido");
+ const ok=status==="monitoring",err=status==="api_error"||status==="data_gap";
+ $("status").className="pill "+(ok?"ok":err?"err":"");
+ $("status").textContent=ok?"● MONITORANDO":err?"● ATENÇÃO":"● "+status.toUpperCase().replaceAll("_"," ");
+ $("notice").textContent=status==="awaiting_api_key"?"Ativação pendente: configure TWELVE_DATA_API_KEY nos Secrets do GitHub. Nenhuma operação será feita sem dados válidos.":(s.message||"Simulação sem ordens reais.");
+ const rows=$("results");rows.replaceChildren();
+ const results=Array.isArray(s.closed_results)?s.closed_results:[];
+ if(!results.length)rows.appendChild(row(["Sem operações encerradas.","","",""]));
+ else results.forEach(t=>rows.appendChild(row([tm(t.at),t.side,t.reason,(Number(t.pnl)>0?"+":"")+usd(t.pnl)])));
+ const ev=$("events");ev.replaceChildren();
+ const events=Array.isArray(s.events)?s.events:[];
+ if(!events.length)ev.textContent="Sem eventos até o momento.";
+ else events.forEach(e=>{const d=document.createElement("div");d.className="event";d.textContent=(e.at?tm(e.at)+" · ":"")+String(e.message||"");ev.appendChild(d)});
+ chart(s.equity_curve);
+}
+let busy=false;
 async function load(){
-  if(loading)return;loading=true;$("refresh").disabled=true;
-  try{
-    const response=await fetch("./state.json?ts="+Date.now(),{cache:"no-store"});
-    if(!response.ok)throw new Error("HTTP "+response.status);
-    const state=await response.json();
-    if(state.version!==2||state.mode!=="PAPER")throw new Error("Estado inesperado");
-    show(state);
-  }catch(e){
-    $("statusPill").textContent="● FALHA AO CARREGAR";
-    $("statusPill").className="pill err";
-    $("notice").textContent="Não foi possível carregar o estado publicado. Tente novamente. "+e.message;
-  }finally{loading=false;$("refresh").disabled=false;}
+ if(busy)return;busy=true;$("refresh").disabled=true;
+ try{
+  const r=await fetch("./state.json?_="+Date.now(),{cache:"no-store"});
+  if(!r.ok)throw Error("HTTP "+r.status);
+  const s=await r.json();
+  if(s.version!==2||s.mode!=="PAPER_ONLY"||s.pair!=="EUR/USD")throw Error("Formato do painel incompatível");
+  show(s);
+ }catch(e){
+  $("status").textContent="● FALHA DE LEITURA";$("status").className="pill err";
+  $("notice").textContent="Não foi possível ler o estado público da V2. "+e.message;
+ }finally{busy=false;$("refresh").disabled=false}
 }
 $("refresh").addEventListener("click",load);
-document.addEventListener("visibilitychange",()=>{if(!document.hidden)load();});
-setInterval(load,60000);
-load();
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)load()});
+setInterval(load,60000);load();
 </script>
-</body>
-</html>
+</body></html>
