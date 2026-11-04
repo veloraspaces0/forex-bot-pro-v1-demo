@@ -1,0 +1,24 @@
+Fonte: GitHub commits da branch forex-bot-pro-v2-1-hardening
+Registro gerado a partir da API do GitHub, equivalente a git log --oneline -20.
+Link: https://github.com/veloraspaces0/forex-bot-pro-v1-demo/commits/forex-bot-pro-v2-1-hardening/
+
+10c4aa78f3  fix(v2.1): bloquear bootstrap com historico inicial incompleto e testar regressao  (2026-11-04T11:53:54Z)
+476162d327  fix(v2.1): bloquear bootstrap com historico inicial incompleto e testar regressao  (2026-11-04T11:53:51Z)
+d105b94ac9  ui(v2.1): explicitar violacoes de risco e bloqueio por gap no painel iPhone  (2026-11-04T11:52:46Z)
+7d336a66ca  test/docs(v2.1): regressao offline abrangente e guia de seguranca  (2026-11-04T11:51:27Z)
+ecf43d384c  test/docs(v2.1): regressao offline abrangente e guia de seguranca  (2026-11-04T11:51:25Z)
+491f8ee50e  fix(v2.1): fortalecer risco dados e persistencia cifrada mantendo compatibilidade V2  (2026-11-04T11:51:22Z)
+598562f439  fix(v2.1): fortalecer risco dados e persistencia cifrada mantendo compatibilidade V2  (2026-11-04T11:51:20Z)
+eb995020aa  ci(v2.1): validar offline em branches, bloquear paper fora da main e reduzir permissoes  (2026-11-04T11:51:07Z)
+aaa71a728c  data(v2): update encrypted paper state [skip ci]  (2026-11-04T11:40:00Z)
+cf6a6a860d  data(v2): update encrypted paper state [skip ci]  (2026-11-04T10:41:37Z)
+cc48c607de  data(v2): update encrypted paper state [skip ci]  (2026-11-04T09:29:37Z)
+aaad2d6afd  data(v2): update encrypted paper state [skip ci]  (2026-11-04T08:28:12Z)
+e0a71465cb  data(v2): update encrypted paper state [skip ci]  (2026-11-04T07:11:10Z)
+d34ff821ba  data(v2): update encrypted paper state [skip ci]  (2026-11-04T05:58:07Z)
+0b7b2d1642  data(v2): update encrypted paper state [skip ci]  (2026-11-04T04:57:06Z)
+7d16f7ca9c  data(v2): update encrypted paper state [skip ci]  (2026-11-04T03:56:17Z)
+4ce1146c0a  security(v2): also ignore temporary market data snapshots  (2026-11-04T03:17:04Z)
+220a2dd640  security(v2): ignore private quote state and local secrets  (2026-11-04T03:16:08Z)
+4d8b9a77f4  docs(v2): document encrypted cloud runner and realistic paper limits  (2026-11-04T03:15:56Z)
+5afb3023ce  security(v2): disable legacy plaintext paper runner  (2026-11-04T03:15:19Z)
