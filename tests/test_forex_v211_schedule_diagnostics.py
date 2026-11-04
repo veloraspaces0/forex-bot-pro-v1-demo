@@ -287,5 +287,20 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         types = {a["type"] for a in diagnose([run(5)], s, NOW)["anomalies"]}
         self.assertIn("invalid_risk_violations", types)
 
+
+    def test_workflow_name_change_does_not_hide_schedule(self):
+        r = dict(run(5), name="Renamed paper workflow")
+        result = diagnose([r], state(5), NOW)
+        self.assertEqual(result["scheduled_runs"], 1)
+
+    def test_invalid_timestamp_none_is_value_error(self):
+        r = dict(run(5), created_at=None)
+        with self.assertRaises(ValueError):
+            diagnose([r], state(5), NOW)
+
+    def test_boolean_pagination_limit_rejected(self):
+        with self.assertRaises(ValueError):
+            fetch_workflow_runs("https://api.github.com/repos/example/repo", max_pages=True)
+
 if __name__ == "__main__":
     unittest.main()
