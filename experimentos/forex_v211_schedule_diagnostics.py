@@ -147,6 +147,7 @@ def diagnose(runs, state, now):
     report["recent_scheduled_runs"] = sum(parse_time(r["created_at"]) >= recent_cutoff for r in scheduled)
     report["historical_scheduled_runs"] = len(scheduled) - report["recent_scheduled_runs"]
     report["queue_delays_minutes"] = []
+    report["invalid_queue_timestamp_count"] = 0
     report["schedule_dispatch_offsets_minutes"] = []
     # Expected cron minutes are 07, 22, 37, 52 UTC. Created_at is
     # a GitHub run-creation timestamp, not proof of the actual trigger time.
@@ -161,6 +162,7 @@ def diagnose(runs, state, now):
     ]
     report["max_recent_dispatch_offset_minutes"] = max(report["recent_dispatch_offsets_minutes"], default=None)
     report["recent_dispatch_sample_count"] = len(report["recent_dispatch_offsets_minutes"])
+    report["recent_dispatch_sample_pct"] = round(100 * report["recent_dispatch_sample_count"] / len(scheduled), 2) if scheduled else None
     for a, b in zip(scheduled, scheduled[1:]):
         gap = round((parse_time(a["created_at"]) - parse_time(b["created_at"])).total_seconds()/60, 2)
         report["intervals_minutes"].append(gap)
@@ -182,6 +184,7 @@ def diagnose(runs, state, now):
             report["anomalies"].append({"type": "future_run_created_at", "run": r.get("html_url")})
         started = parse_time(r["run_started_at"]) if r.get("run_started_at") else None
         if started is not None and started < created:
+            report["invalid_queue_timestamp_count"] += 1
             target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
             report[target].append({"type": "inconsistent_run_timestamps", "run": r.get("html_url")})
         if started is not None and started >= created:
@@ -207,6 +210,7 @@ def diagnose(runs, state, now):
             report[target].append({"type": "workflow_failure", "run": r.get("html_url"),
                                    "conclusion": r["conclusion"]})
     report["queue_delay_sample_count"] = len(report["queue_delays_minutes"])
+    report["queue_delay_coverage_pct"] = round(100 * report["queue_delay_sample_count"] / len(scheduled), 2) if scheduled else None
     report["queue_delay_missing_count"] = sum(1 for r in scheduled if not r.get("run_started_at"))
     report["max_queue_delay_minutes"] = max(report["queue_delays_minutes"], default=None)
     successful = [r for r in scheduled if parse_time(r["created_at"]) <= now + dt.timedelta(minutes=2)
