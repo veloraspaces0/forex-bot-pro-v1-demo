@@ -608,3 +608,30 @@ test("recovery KV deletion failure is visible even when Telegram accepted recove
   assert.equal(result.storeDegraded,true);
   assert.ok(store.records.has("forex-watch-v23-incident"));
 });
+
+
+test("two different recent failures bypass dedupe despite the same alert code",async()=>{
+  const store=memoryKV(),env=activeEnv(store);
+  let sends=0;
+  const sender=async()=>{sends++;return telegramOk()};
+  const rr=runs();rr[1].conclusion="failure";rr[1].id=901;
+  const initial=assess(state(),rr,NOW);
+  assert.equal(initial.recentFailedRunId,901);
+  assert.ok(codes(initial).includes("RECENT_FAILURE"));
+  assert.equal((await deliver(initial,env,NOW,sender)).notified,true);
+  assert.equal((await deliver(initial,env,NOW+1000,sender)).notified,false);
+  const next={...initial,recentFailedRunId:902};
+  assert.equal((await deliver(next,env,NOW+2000,sender)).notified,true);
+  assert.equal(sends,2);
+});
+test("new increments of risk_violations are not silently deduplicated",async()=>{
+  const store=memoryKV(),env=activeEnv(store);
+  let sends=0;
+  const sender=async()=>{sends++;return telegramOk()};
+  const report=assess(state(4,20,false,NOW,{risk_violations:1}),runs(),NOW);
+  assert.ok(codes(report).includes("RISK_VIOLATIONS"));
+  await deliver(report,env,NOW,sender);
+  assert.equal((await deliver(report,env,NOW+500,sender)).notified,false);
+  assert.equal((await deliver({...report,riskViolations:2},env,NOW+1000,sender)).notified,true);
+  assert.equal(sends,2);
+});
