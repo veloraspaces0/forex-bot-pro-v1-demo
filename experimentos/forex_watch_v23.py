@@ -76,10 +76,16 @@ def assess(state, runs, now):
             if last_run_age > 20:
                 flag("CRITICO", "QUEUE_STUCK", "Execução presa na fila do GitHub.", age_min=last_run_age)
         elif run_status == "in_progress":
-            started = last.get("run_started_at") or last["created_at"]
-            elapsed = age_min(started, now)
-            if elapsed > 20:
-                flag("CRITICO", "RUN_STUCK", "Execução em andamento além do limite esperado.", age_min=elapsed)
+            started = last.get("run_started_at")
+            if not started:
+                flag("CRITICO" if last_run_age > 75 else "ATENCAO",
+                     "RUN_START_UNKNOWN",
+                     "Execução em andamento sem run_started_at: duração real desconhecida.",
+                     run_created_age_min=last_run_age)
+            else:
+                elapsed = age_min(started, now)
+                if elapsed > 20:
+                    flag("CRITICO", "RUN_STUCK", "Execução em andamento além do limite esperado.", age_min=elapsed)
         elif run_status == "completed":
             if conclusion in {"failure", "cancelled", "timed_out", "action_required", "startup_failure"}:
                 flag("CRITICO", "RUN_FAILED", "Última execução terminou sem sucesso.", conclusion=conclusion)
