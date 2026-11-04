@@ -91,5 +91,24 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         result = diagnose([r], state(5), NOW)
         self.assertIn("inconsistent_run_timestamps", {a["type"] for a in result["anomalies"]})
 
+
+    def test_future_timestamp_open_position_is_critical(self):
+        result = diagnose([run(5)], state(-20), NOW)
+        self.assertIn("critical_open_position_unchecked", {a["type"] for a in result["anomalies"]})
+
+    def test_timed_out_run_is_failure(self):
+        result = diagnose([run(5, "timed_out")], state(5), NOW)
+        self.assertIn("workflow_failure", {a["type"] for a in result["anomalies"]})
+
+    def test_queued_run_is_not_success(self):
+        r = dict(run(5), status="queued", conclusion=None)
+        result = diagnose([r], state(5), NOW)
+        self.assertIn("run_not_completed", {a["type"] for a in result["anomalies"]})
+
+    def test_no_matching_schedule_is_explicit(self):
+        r = dict(run(5), event="push")
+        result = diagnose([r], state(5), NOW)
+        self.assertIn("no_matching_scheduled_runs", {a["type"] for a in result["anomalies"]})
+
 if __name__ == "__main__":
     unittest.main()
