@@ -79,11 +79,19 @@ def assess(state, runs, now):
     wins, losses = state.get("wins"), state.get("losses")
     results = state.get("closed_results")
     cash0, pnl = state.get("initial_balance"), state.get("pnl_total")
+    cash_coherent = (state["closed_trades"] > 20 or (
+        isinstance(results, list) and type(cash0) in (int, float) and
+        all(isinstance(t, dict) and type(t.get("pnl")) in (int, float) and
+            math.isfinite(t["pnl"]) for t in results) and
+        abs(cash0 + sum(t["pnl"] for t in results) - state["balance"]) <
+        (.016 + len(results)*.006)
+    ))
     coherent = (type(wins) is int and wins >= 0 and
                 type(losses) is int and losses >= 0 and
                 wins + losses == state["closed_trades"] and
                 isinstance(results, list) and
                 len(results) == min(20, state["closed_trades"]) and
+                cash_coherent and
                 isinstance(final_point, dict) and
                 final_point.get("n") == state["closed_trades"] and
                 type(final_point.get("balance")) in (float, int) and
