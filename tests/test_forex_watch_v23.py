@@ -286,5 +286,25 @@ class V23EngineStatuses(unittest.TestCase):
         self.assertEqual(result["status"],"ATENCAO")
         self.assertIn("UNRECOGNIZED_BOT_STATUS",reasons(result))
 
+class V23GreenWorkflowChecks(unittest.TestCase):
+    def test_green_workflow_but_paper_job_not_published(self):
+        rr=runs((12,27,42,57,72))
+        rr[0]["updated_at"]=stamp(10)
+        report=watch.assess(state(age=20,candle_age=20,opened=True),rr,NOW)
+        self.assertEqual(report["status"],"CRITICO")
+        self.assertIn("SUCCESS_WITHOUT_NEW_STATE",reasons(report))
+
+    def test_propagation_grace(self):
+        rr=runs((12,27,42,57,72))
+        rr[0]["updated_at"]=stamp(1)
+        report=watch.assess(state(age=20,candle_age=20,opened=True),rr,NOW)
+        self.assertNotIn("SUCCESS_WITHOUT_NEW_STATE",reasons(report))
+
+    def test_published_state_after_run(self):
+        rr=runs((12,27,42,57,72))
+        rr[0]["updated_at"]=stamp(9)
+        report=watch.assess(state(age=4,candle_age=20,opened=True),rr,NOW)
+        self.assertNotIn("SUCCESS_WITHOUT_NEW_STATE",reasons(report))
+
 if __name__ == "__main__":
     unittest.main()
