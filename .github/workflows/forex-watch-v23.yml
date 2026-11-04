@@ -34,6 +34,8 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           text=Path('experimentos/forex_watch_v23_worker.mjs').read_text()
-          assert "state.enc" not in text or 'state.enc' in text, 'No-op demonstration'
-          print("Experimental CI: no scheduled deployment; no GitHub repository writes.")
+          assert "state.enc" not in text, "Worker must not read encrypted operational state"
+          assert "github.com" in text and "api.github.com" in text, "Public GitHub source required"
+          assert "git push" not in text and "workflow_dispatch" not in text, "No GitHub write/trigger actions"
+          print("Experimental CI: Worker static checks OK; no scheduled deployment.")
           PY
