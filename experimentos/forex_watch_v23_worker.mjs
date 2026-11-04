@@ -212,7 +212,24 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
       // Read at most 2048 bytes for classification. Never log or forward the body.
       let hint="";
       if(response.status===403){
-        try {hint=(await response.text()).slice(0,2048).toLowerCase();} catch {}
+        try {
+          // Read at most 2048 bytes, rather than downloading an unbounded error body.
+          if(response.body?.getReader){
+            const reader=response.body.getReader();
+            const chunks=[]; let bytes=0;
+            try {
+              while(bytes<2048){
+                const {done,value}=await reader.read();
+                if(done) break;
+                const chunk=value.subarray(0,2048-bytes);
+                chunks.push(chunk); bytes+=chunk.length;
+              }
+            } finally {await reader.cancel().catch(()=>{});}
+            const combined=new Uint8Array(bytes);let offset=0;
+            for(const chunk of chunks){combined.set(chunk,offset);offset+=chunk.length;}
+            hint=new TextDecoder().decode(combined).toLowerCase();
+          } else hint=(await response.text()).slice(0,2048).toLowerCase();
+        } catch {}
       }
       const secondary=/secondary rate limit|abuse detection|secondary-rate-limit|api rate limit exceeded|rate limit exceeded/.test(hint);
       const limited=(response.status===403 || response.status===429) &&
