@@ -56,6 +56,8 @@ def fetch_workflow_runs(base, max_pages=5):
                     continue
                 seen_ids.add(identifier)
             all_runs.append(item)
+        if len(all_runs) > expected:
+            pagination_anomalies.append("more_unique_runs_than_total_count")
         if len(batch) < 100 or len(all_runs) >= expected:
             break
     return {"workflow_runs": all_runs, "total_count": expected,
