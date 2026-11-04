@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "pair": "EUR/USD",
+  "timeframe": "15min",
+  "mode": "PAPER",
+  "source": "Twelve Data",
+  "initial_balance": 100,
+  "balance": 100,
+  "last_candle": null,
+  "last_check_utc": null,
+  "day": null,
+  "day_start_equity": 100,
+  "position": null,
+  "pending": null,
+  "candles": [],
+  "trades": [],
+  "events": [],
+  "warmup_remaining": 0,
+  "missed_intervals": 0,
+  "status": "AGUARDANDO_API",
+  "error": "Configure TWELVE_DATA_API_KEY nos Secrets do GitHub Actions."
+}
