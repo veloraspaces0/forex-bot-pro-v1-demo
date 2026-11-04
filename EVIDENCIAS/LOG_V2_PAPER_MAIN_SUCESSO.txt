@@ -1,0 +1,254 @@
+Workflow V2 paper na main (não é execução da V2.1)
+Fonte: https://github.com/veloraspaces0/forex-bot-pro-v1-demo/actions/runs/41822743778
+Job ID: 126549695467
+Coletado do GitHub Actions pelo conector (texto do log da execução original).
+A publicação deste texto NÃO inclui chaves/API tokens e não equivale a fornecer o estado cifrado.
+
+----- BEGIN ORIGINAL JOB LOG -----
+﻿2026-11-04T11:39:55.9817960Z Current runner version: '2.338.2'
+2026-11-04T11:39:55.9847756Z ##[group]Runner Image Provisioner
+2026-11-04T11:39:55.9848882Z Hosted Compute Agent
+2026-11-04T11:39:55.9849506Z Version: 20261021.618
+2026-11-04T11:39:55.9850184Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-11-04T11:39:55.9850984Z Build Date: 2026-10-21T00:45:21Z
+2026-11-04T11:39:55.9851683Z Worker ID: {ea5c2f32-752f-4882-9642-72af2f4713ad}
+2026-11-04T11:39:55.9852464Z Region: westus2
+2026-11-04T11:39:55.9853071Z Cloud: Azure
+2026-11-04T11:39:55.9853651Z ##[endgroup]
+2026-11-04T11:39:55.9855276Z ##[group]Operating System
+2026-11-04T11:39:55.9855942Z Ubuntu
+2026-11-04T11:39:55.9856559Z 26.04.1
+2026-11-04T11:39:55.9857512Z LTS
+2026-11-04T11:39:55.9858181Z ##[endgroup]
+2026-11-04T11:39:55.9858824Z ##[group]Runner Image
+2026-11-04T11:39:55.9859456Z Image: ubuntu-26.04
+2026-11-04T11:39:55.9860085Z Version: 20261025.179.1
+2026-11-04T11:39:55.9861491Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-04T11:39:55.9863344Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+2026-11-04T11:39:55.9864330Z ##[endgroup]
+2026-11-04T11:39:55.9865552Z ##[group]GITHUB_TOKEN Permissions
+2026-11-04T11:39:55.9867893Z Contents: write
+2026-11-04T11:39:55.9868730Z Metadata: read
+2026-11-04T11:39:55.9869804Z ##[endgroup]
+2026-11-04T11:39:55.9872204Z Secret source: Actions
+2026-11-04T11:39:55.9873272Z Cache mode: write
+2026-11-04T11:39:55.9874065Z Prepare workflow directory
+2026-11-04T11:39:56.0311141Z Prepare all required actions
+2026-11-04T11:39:56.0363908Z Getting action download info
+2026-11-04T11:39:56.3855857Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-11-04T11:39:56.5073500Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-11-04T11:39:56.6962246Z Complete job name: paper
+2026-11-04T11:39:56.7975124Z ##[group]Run actions/checkout@v4
+2026-11-04T11:39:56.7976391Z with:
+2026-11-04T11:39:56.7977409Z   persist-credentials: true
+2026-11-04T11:39:56.7978405Z   repository: veloraspaces0/forex-bot-pro-v1-demo
+2026-11-04T11:39:56.7984011Z   token: ***
+2026-11-04T11:39:56.7984493Z   ssh-strict: true
+2026-11-04T11:39:56.7984958Z   ssh-user: git
+2026-11-04T11:39:56.7985399Z   clean: true
+2026-11-04T11:39:56.7985860Z   sparse-checkout-cone-mode: true
+2026-11-04T11:39:56.7986547Z   fetch-depth: 1
+2026-11-04T11:39:56.7988041Z   fetch-tags: false
+2026-11-04T11:39:56.7988856Z   show-progress: true
+2026-11-04T11:39:56.7989366Z   lfs: false
+2026-11-04T11:39:56.7989812Z   submodules: false
+2026-11-04T11:39:56.7990279Z   set-safe-directory: true
+2026-11-04T11:39:56.7990812Z   allow-unsafe-pr-checkout: false
+2026-11-04T11:39:56.7991759Z ##[endgroup]
+2026-11-04T11:39:57.1453205Z Syncing repository: veloraspaces0/forex-bot-pro-v1-demo
+2026-11-04T11:39:57.1455091Z ##[group]Getting Git version info
+2026-11-04T11:39:57.1456086Z Working directory is '/home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo'
+2026-11-04T11:39:57.1457631Z [command]/usr/bin/git version
+2026-11-04T11:39:57.1485169Z git version 2.56.0
+2026-11-04T11:39:57.1538702Z ##[endgroup]
+2026-11-04T11:39:57.1551865Z Temporarily overriding HOME='/home/runner/work/_temp/31e9a0a1-a639-4963-8695-bdf4d4633d28' before making global git config changes
+2026-11-04T11:39:57.1554547Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-04T11:39:57.1556156Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo
+2026-11-04T11:39:57.1753674Z Deleting the contents of '/home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo'
+2026-11-04T11:39:57.1761185Z ##[group]Initializing the repository
+2026-11-04T11:39:57.1766713Z [command]/usr/bin/git init /home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo
+2026-11-04T11:39:57.1923062Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-04T11:39:57.1925325Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-04T11:39:57.1926762Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-04T11:39:57.1928134Z hint: call:
+2026-11-04T11:39:57.1928682Z hint:
+2026-11-04T11:39:57.1929367Z hint: 	git config --global init.defaultBranch <name>
+2026-11-04T11:39:57.1930495Z hint:
+2026-11-04T11:39:57.1931201Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-04T11:39:57.1932165Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-04T11:39:57.1933143Z hint:
+2026-11-04T11:39:57.1933618Z hint: 	git branch -m <name>
+2026-11-04T11:39:57.1934115Z hint:
+2026-11-04T11:39:57.1934755Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-04T11:39:57.1941666Z Initialized empty Git repository in /home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo/.git/
+2026-11-04T11:39:57.1954692Z [command]/usr/bin/git remote add origin https://github.com/veloraspaces0/forex-bot-pro-v1-demo
+2026-11-04T11:39:57.2021959Z ##[endgroup]
+2026-11-04T11:39:57.2023340Z ##[group]Disabling automatic garbage collection
+2026-11-04T11:39:57.2026641Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-04T11:39:57.2071292Z ##[endgroup]
+2026-11-04T11:39:57.2072697Z ##[group]Setting up auth
+2026-11-04T11:39:57.2079255Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-04T11:39:57.2126296Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-04T11:39:57.2627704Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-04T11:39:57.2665956Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-04T11:39:57.2946060Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-04T11:39:57.2985455Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-04T11:39:57.3273471Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-04T11:39:57.3314152Z ##[endgroup]
+2026-11-04T11:39:57.3315660Z ##[group]Fetching the repository
+2026-11-04T11:39:57.3325478Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +cf6a6a860d50694a5a2618202a21b8849a0cfab7:refs/remotes/origin/main
+2026-11-04T11:39:57.6321641Z From https://github.com/veloraspaces0/forex-bot-pro-v1-demo
+2026-11-04T11:39:57.6323826Z  * [new ref]         cf6a6a860d50694a5a2618202a21b8849a0cfab7 -> origin/main
+2026-11-04T11:39:57.6328659Z ##[endgroup]
+2026-11-04T11:39:57.6330665Z ##[group]Determining the checkout info
+2026-11-04T11:39:57.6332491Z ##[endgroup]
+2026-11-04T11:39:57.6339807Z [command]/usr/bin/git sparse-checkout disable
+2026-11-04T11:39:57.6400400Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-04T11:39:57.6435602Z ##[group]Checking out the ref
+2026-11-04T11:39:57.6441127Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-11-04T11:39:57.6519096Z Switched to a new branch 'main'
+2026-11-04T11:39:57.6523674Z branch 'main' set up to track 'origin/main'.
+2026-11-04T11:39:57.6538401Z ##[endgroup]
+2026-11-04T11:39:57.6582324Z [command]/usr/bin/git log -1 --format=%H
+2026-11-04T11:39:57.6609610Z cf6a6a860d50694a5a2618202a21b8849a0cfab7
+2026-11-04T11:39:57.6951077Z ##[group]Run actions/setup-python@v5
+2026-11-04T11:39:57.6951943Z with:
+2026-11-04T11:39:57.6952442Z   python-version: 3.12
+2026-11-04T11:39:57.6953081Z   check-latest: false
+2026-11-04T11:39:57.6962561Z   token: ***
+2026-11-04T11:39:57.6963339Z   update-environment: true
+2026-11-04T11:39:57.6964040Z   allow-prereleases: false
+2026-11-04T11:39:57.6964705Z   freethreaded: false
+2026-11-04T11:39:57.6965283Z ##[endgroup]
+2026-11-04T11:39:57.8373186Z ##[group]Installed versions
+2026-11-04T11:39:57.8494630Z (node:2654) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-04T11:39:57.8498643Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-04T11:39:57.8501439Z Successfully set up CPython (3.12.15)
+2026-11-04T11:39:57.8504057Z ##[endgroup]
+2026-11-04T11:39:57.8761370Z ##[group]Run python -m pip install 'cryptography>=43,<49'
+2026-11-04T11:39:57.8762760Z [36;1mpython -m pip install 'cryptography>=43,<49'[0m
+2026-11-04T11:39:57.8824971Z shell: /usr/bin/bash -e {0}
+2026-11-04T11:39:57.8826168Z env:
+2026-11-04T11:39:57.8827683Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:57.8830298Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-11-04T11:39:57.8833228Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:57.8835214Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:57.8837486Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:57.8839568Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-11-04T11:39:57.8841249Z ##[endgroup]
+2026-11-04T11:39:59.0254467Z Collecting cryptography<49,>=43
+2026-11-04T11:39:59.0617328Z   Downloading cryptography-48.0.1-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.3 kB)
+2026-11-04T11:39:59.1721651Z Collecting cffi>=2.0.0 (from cryptography<49,>=43)
+2026-11-04T11:39:59.1797542Z   Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+2026-11-04T11:39:59.1957148Z Collecting pycparser (from cffi>=2.0.0->cryptography<49,>=43)
+2026-11-04T11:39:59.2027773Z   Downloading pycparser-3.12-py3-none-any.whl.metadata (9.7 kB)
+2026-11-04T11:39:59.2150667Z Downloading cryptography-48.0.1-cp311-abi3-manylinux_2_34_x86_64.whl (4.7 MB)
+2026-11-04T11:39:59.2588234Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.7/4.7 MB 162.0 MB/s  0:00:00
+2026-11-04T11:39:59.2661573Z Downloading cffi-2.1.1-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+2026-11-04T11:39:59.2763412Z Downloading pycparser-3.12-py3-none-any.whl (62 kB)
+2026-11-04T11:39:59.3338909Z Installing collected packages: pycparser, cffi, cryptography
+2026-11-04T11:39:59.6189630Z 
+2026-11-04T11:39:59.6202076Z Successfully installed cffi-2.1.1 cryptography-48.0.1 pycparser-3.12
+2026-11-04T11:39:59.6211417Z 
+2026-11-04T11:39:59.6211823Z [notice] A new release of pip is available: 26.2.2 -> 26.3
+2026-11-04T11:39:59.6212377Z [notice] To update, run: pip install --upgrade pip
+2026-11-04T11:39:59.6797628Z ##[group]Run python -m unittest discover -s tests -v
+2026-11-04T11:39:59.6798110Z [36;1mpython -m unittest discover -s tests -v[0m
+2026-11-04T11:39:59.6830113Z shell: /usr/bin/bash -e {0}
+2026-11-04T11:39:59.6830398Z env:
+2026-11-04T11:39:59.6830685Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:59.6831144Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-11-04T11:39:59.6831582Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:59.6831973Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:59.6832368Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:59.6832762Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-11-04T11:39:59.6833101Z ##[endgroup]
+2026-11-04T11:39:59.8108475Z test_bootstrap_no_backfill (test_paper_bot.PaperBotTests.test_bootstrap_no_backfill) ... ok
+2026-11-04T11:39:59.8113107Z test_gapped_history_halts (test_paper_bot.PaperBotTests.test_gapped_history_halts) ... ok
+2026-11-04T11:39:59.8117253Z test_indicators (test_paper_bot.PaperBotTests.test_indicators) ... ok
+2026-11-04T11:39:59.8118210Z test_initial_mode (test_paper_bot.PaperBotTests.test_initial_mode) ... ok
+2026-11-04T11:39:59.8122045Z test_risk_and_leverage (test_paper_bot.PaperBotTests.test_risk_and_leverage) ... ok
+2026-11-04T11:39:59.8123275Z test_stop_first_same_bar (test_paper_bot.PaperBotTests.test_stop_first_same_bar) ... ok
+2026-11-04T11:39:59.8124019Z 
+2026-11-04T11:39:59.8124327Z ----------------------------------------------------------------------
+2026-11-04T11:39:59.8124804Z Ran 6 tests in 0.002s
+2026-11-04T11:39:59.8124994Z 
+2026-11-04T11:39:59.8125110Z OK
+2026-11-04T11:39:59.8263019Z ##[group]Run python v2/runner.py
+2026-11-04T11:39:59.8263384Z [36;1mpython v2/runner.py[0m
+2026-11-04T11:39:59.8294881Z shell: /usr/bin/bash -e {0}
+2026-11-04T11:39:59.8295147Z env:
+2026-11-04T11:39:59.8295482Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:59.8295923Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-11-04T11:39:59.8296375Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:59.8296788Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:59.8297535Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:39:59.8297940Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-11-04T11:39:59.8298592Z   TWELVE_DATA_API_KEY: ***
+2026-11-04T11:39:59.8298855Z   V2_STATE_ENCRYPTION_KEY: 
+2026-11-04T11:39:59.8299091Z ##[endgroup]
+2026-11-04T11:40:00.1552247Z V2 monitoring trades 1 balance 99.500722
+2026-11-04T11:40:00.1553411Z Only encrypted candles and derived dashboard data persisted.
+2026-11-04T11:40:00.1704552Z ##[group]Run python - <<'PY'
+2026-11-04T11:40:00.1704905Z [36;1mpython - <<'PY'[0m
+2026-11-04T11:40:00.1705164Z [36;1mimport json[0m
+2026-11-04T11:40:00.1705500Z [36;1mdata=json.load(open('v2/state.json',encoding='utf-8'))[0m
+2026-11-04T11:40:00.1706011Z [36;1mforbidden={'candles','last_quote','position','trades','apikey'}[0m
+2026-11-04T11:40:00.1706539Z [36;1massert not (forbidden & data.keys()), 'Public market data leak'[0m
+2026-11-04T11:40:00.1707349Z [36;1massert data['mode']=='PAPER_ONLY'[0m
+2026-11-04T11:40:00.1707692Z [36;1mprint('Public summary verified.')[0m
+2026-11-04T11:40:00.1707969Z [36;1mPY[0m
+2026-11-04T11:40:00.1737804Z shell: /usr/bin/bash -e {0}
+2026-11-04T11:40:00.1738064Z env:
+2026-11-04T11:40:00.1738342Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:40:00.1738813Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-11-04T11:40:00.1739314Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:40:00.1739728Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:40:00.1740136Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:40:00.1740555Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-11-04T11:40:00.1740905Z ##[endgroup]
+2026-11-04T11:40:00.1978973Z Public summary verified.
+2026-11-04T11:40:00.2041893Z ##[group]Run git add -A -- v2/
+2026-11-04T11:40:00.2042226Z [36;1mgit add -A -- v2/[0m
+2026-11-04T11:40:00.2042509Z [36;1mif git diff --cached --quiet; then[0m
+2026-11-04T11:40:00.2042815Z [36;1m  echo "No changes"[0m
+2026-11-04T11:40:00.2043059Z [36;1m  exit 0[0m
+2026-11-04T11:40:00.2043261Z [36;1mfi[0m
+2026-11-04T11:40:00.2043503Z [36;1mgit config user.name "github-actions[bot]"[0m
+2026-11-04T11:40:00.2043987Z [36;1mgit config user.email "41898282+github-actions[bot]@users.noreply.github.com"[0m
+2026-11-04T11:40:00.2044553Z [36;1mgit commit -m "data(v2): update encrypted paper state [skip ci]"[0m
+2026-11-04T11:40:00.2044941Z [36;1mgit push[0m
+2026-11-04T11:40:00.2073299Z shell: /usr/bin/bash -e {0}
+2026-11-04T11:40:00.2073552Z env:
+2026-11-04T11:40:00.2073818Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:40:00.2074263Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib/pkgconfig
+2026-11-04T11:40:00.2074728Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:40:00.2075282Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:40:00.2075669Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.15/x64
+2026-11-04T11:40:00.2076052Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.15/x64/lib
+2026-11-04T11:40:00.2076374Z ##[endgroup]
+2026-11-04T11:40:00.2273931Z [main aaa71a7] data(v2): update encrypted paper state [skip ci]
+2026-11-04T11:40:00.2274710Z  3 files changed, 5 insertions(+), 5 deletions(-)
+2026-11-04T11:40:01.3388970Z To https://github.com/veloraspaces0/forex-bot-pro-v1-demo
+2026-11-04T11:40:01.3390038Z    cf6a6a8..aaa71a7  main -> main
+2026-11-04T11:40:01.3568151Z Post job cleanup.
+2026-11-04T11:40:01.4790572Z (node:2713) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-04T11:40:01.4791722Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-04T11:40:01.4977703Z Post job cleanup.
+2026-11-04T11:40:01.5887888Z [command]/usr/bin/git version
+2026-11-04T11:40:01.5933436Z git version 2.56.0
+2026-11-04T11:40:01.5973423Z Temporarily overriding HOME='/home/runner/work/_temp/48ee9589-43d8-49e9-8b82-68dd884a2457' before making global git config changes
+2026-11-04T11:40:01.5974780Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-04T11:40:01.5979103Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/forex-bot-pro-v1-demo/forex-bot-pro-v1-demo
+2026-11-04T11:40:01.6020607Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-04T11:40:01.6077492Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-04T11:40:01.6382955Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-04T11:40:01.6413032Z http.https://github.com/.extraheader
+2026-11-04T11:40:01.6426027Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-04T11:40:01.6469871Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-04T11:40:01.6787849Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-04T11:40:01.6827270Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-04T11:40:01.7245678Z Cleaning up orphan processes
+2026-11-04T11:40:01.7648872Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+
+----- END ORIGINAL JOB LOG -----
