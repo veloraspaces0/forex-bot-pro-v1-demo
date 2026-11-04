@@ -6,6 +6,7 @@ on:
       - experimento-forex-watch-v23-20261104
       - hardening-forex-watch-v23-20261104
       - deploy-ready-forex-watch-v23-20261104
+      - revisao-final-forex-watch-v23-20261104
     paths:
       - 'experimentos/forex_watch_v23.py'
       - 'experimentos/forex_watch_v23_worker.mjs'
@@ -20,7 +21,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -33,6 +34,8 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_forex_watch_v23.py' -v
       - name: Cloudflare Worker V2.3 offline tests
         run: node --test tests/test_forex_watch_v23_worker.mjs
+      - name: Cloudflare Wrangler v4 bundle validation (DRY RUN — no deploy)
+        run: npx --yes wrangler@4 deploy --dry-run --config experimentos/wrangler_v23.toml
       - name: Validate Windows PowerShell deployment helper syntax (never execute)
         shell: pwsh
         run: |
