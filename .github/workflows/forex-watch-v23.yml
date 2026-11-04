@@ -26,7 +26,7 @@ permissions:
 # Cancel outdated EXPERIMENTAL runs only; never share the V2.1 paper bot's lock.
 concurrency:
   group: forex-watch-experimental-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   verify:
     runs-on: ubuntu-latest
