@@ -120,6 +120,12 @@ def diagnose(runs, state, now):
             report["anomalies"].append({"type": "run_missing", "minutes": round(age, 2)})
     else:
         report["anomalies"].append({"type": "no_scheduled_runs_in_response"})
+    if state.get("mode") not in (None, "PAPER_ONLY"):
+        report["anomalies"].append({"type": "unexpected_mode", "mode": state.get("mode")})
+    if state.get("pair") not in (None, "EUR/USD"):
+        report["anomalies"].append({"type": "unexpected_pair", "pair": state.get("pair")})
+    if isinstance(state.get("risk_violations"), (int, float)) and state["risk_violations"] > 0:
+        report["anomalies"].append({"type": "risk_violations", "count": state["risk_violations"]})
     updated = state.get("last_checked_at") or state.get("updated_at")
     if updated:
         age = valid_age(now, updated, report, "state")
