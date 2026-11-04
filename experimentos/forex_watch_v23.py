@@ -73,6 +73,28 @@ def assess(state, runs, now):
     issues = []
     def flag(severity, code, message, **details):
         issues.append({"severity": severity, "code": code, "message": message, **details})
+    # Public historical dashboard consistency; no encrypted state read.
+    curve = state.get("equity_curve")
+    final_point = curve[-1] if isinstance(curve, list) and curve else None
+    wins, losses = state.get("wins"), state.get("losses")
+    results = state.get("closed_results")
+    cash0, pnl = state.get("initial_balance"), state.get("pnl_total")
+    coherent = (type(wins) is int and wins >= 0 and
+                type(losses) is int and losses >= 0 and
+                wins + losses == state["closed_trades"] and
+                isinstance(results, list) and
+                len(results) == min(20, state["closed_trades"]) and
+                isinstance(final_point, dict) and
+                final_point.get("n") == state["closed_trades"] and
+                type(final_point.get("balance")) in (float, int) and
+                math.isfinite(final_point["balance"]) and
+                abs(final_point["balance"] - state["balance"]) < .021 and
+                type(cash0) in (float, int) and type(pnl) in (float, int) and
+                math.isfinite(cash0) and math.isfinite(pnl) and
+                abs(cash0 + pnl - state["estimated_equity"]) < .021)
+    if not coherent:
+        flag("CRITICO", "PUBLIC_HISTORY_INCONSISTENT",
+             "Resumo público diverge em trades, resultado, saldo ou curva de capital.")
     bot = [r for r in runs if isinstance(r, dict) and r.get("name") == WORKFLOW_NAME and r.get("head_branch") == "main"]
     bot.sort(key=lambda r: utc(r.get("created_at")), reverse=True)
     last = bot[0] if bot else None
