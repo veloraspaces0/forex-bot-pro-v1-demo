@@ -1,87 +1,14 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Forex Bot Pro V1 | Simulador</title><style>
-:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,Arial;background:#0b1020;color:#e8eefc}*{box-sizing:border-box}body{margin:0}main{max-width:1200px;margin:auto;padding:22px}h1{font-size:27px;margin:4px 0}h2{font-size:16px;margin:0 0 12px}.muted{color:#9faecb}.banner{padding:12px 16px;background:#3c301a;border:1px solid #a77b23;border-radius:12px;color:#ffe6a2;margin:18px 0}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.pill{background:#193c37;color:#76e2b0;padding:6px 10px;border-radius:999px;font-weight:700;font-size:12px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card,.panel{background:#151d32;border:1px solid #293450;border-radius:14px;padding:17px}.card small{display:block;color:#a9b6cf;margin-bottom:8px}.number{font-weight:750;font-size:24px;letter-spacing:-.5px}.positive{color:#62d7ab}.negative{color:#ff8d98}.layout{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:12px}.panel{margin-top:12px;min-width:0}.buttons{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}button{background:#497cfa;border:none;color:#fff;padding:11px 13px;border-radius:9px;font-weight:700;cursor:pointer}button.secondary{background:#2d3a59}button.danger{background:#763544}button:disabled{opacity:.5;cursor:not-allowed}canvas{width:100%;height:300px;display:block}table{width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap}th,td{padding:10px;border-bottom:1px solid #2b3651;text-align:left}th{color:#adbcd5} .scroll{overflow-x:auto}.kv{display:grid;grid-template-columns:1fr auto;gap:12px;font-size:14px;margin:12px 0}.kv span:first-child{color:#a9b6cf}.events{font-size:13px;color:#cbd6eb;max-height:180px;overflow:auto}.events div{padding:8px 0;border-bottom:1px solid #293450}footer{font-size:12px;color:#9baac6;margin:24px 0}@media(max-width:800px){main{padding:12px}.cards{grid-template-columns:repeat(2,1fr)}.layout{grid-template-columns:1fr}.number{font-size:22px}}@media(max-width:350px){.cards{grid-template-columns:1fr}}
-</style></head><body><main>
-<div class="top"><div><h1>Forex Bot Pro <span class="muted">V1</span></h1><div class="muted">EUR/USD · 15 minutos · Robô de operações simuladas · roda no navegador</div></div><span class="pill">● DEMO · iPHONE</span></div>
-<div class="banner"><b>AVISO:</b> todas as cotações são GERADAS ARTIFICIALMENTE. Não há preços de mercado, conexão com corretora nem ordens reais. Resultados não preveem desempenho futuro.</div>
-<section class="cards"><div class="card"><small>Saldo realizado</small><div class="number" id="balance">—</div></div><div class="card"><small>Patrimônio com posição aberta</small><div class="number" id="equity">—</div></div><div class="card"><small>Resultado total</small><div class="number" id="pnl">—</div></div><div class="card"><small>Operações encerradas / acerto</small><div class="number" id="trades">—</div></div></section>
-<div class="layout"><section class="panel"><h2>Preço sintético EUR/USD</h2><canvas id="chart" width="960" height="320" aria-label="Gráfico de preços sintéticos"></canvas><div class="muted" id="lastPrice">Aguardando a primeira vela</div><div class="buttons"><button data-count="1">+1 candle</button><button data-count="24">+24 candles (6h)</button><button data-count="96">+96 candles (1 dia)</button><button data-count="500">+500 candles</button></div><div class="buttons"><button class="secondary" id="auto">▶ Iniciar avanço automático</button><button class="danger" id="reset">Reiniciar simulação</button><button class="secondary" id="export">Exportar histórico CSV</button></div><p class="muted" id="status">Pronto para simular</p></section>
-<aside class="panel"><h2>Controle de risco</h2><div class="kv"><span>Capital inicial</span><b>US$ 100,00</b></div><div class="kv"><span>Risco nominal por trade</span><b>0,5%</b></div><div class="kv"><span>Limite de perda diária</span><b>2% do patrimônio de início do dia</b></div><div class="kv"><span>Spread sintético</span><b>1,2 pip</b></div><div class="kv"><span>Limite de alavancagem</span><b>20x (simulado)</b></div><div class="kv"><span>EMA rápida / lenta</span><b id="ema">—</b></div><div class="kv"><span>RSI 14 / ATR 14</span><b id="indicators">—</b></div><div class="kv"><span>Risco por próxima operação</span><b id="risk">—</b></div><hr style="border:0;border-top:1px solid #293450"><h2>Posição atual</h2><div id="position" class="muted">Nenhuma posição aberta</div></aside></div>
-<section class="panel"><h2>Histórico de operações fechadas</h2><div class="scroll"><table><thead><tr><th>Entrada (UTC)</th><th>Lado</th><th>Unidades EUR</th><th>Entrada</th><th>Saída</th><th>Motivo</th><th>P/L (USD)</th></tr></thead><tbody id="history"><tr><td colspan="7">Nenhuma operação ainda</td></tr></tbody></table></div></section>
-<section class="panel"><h2>Registro de eventos</h2><div id="events" class="events">Aguardando...</div></section>
-<footer>Estratégia experimental: cruzamento EMA 9/21, filtro RSI 14, Stop Loss de 1,5 ATR e alvo de 2x a distância do stop; apenas uma posição por vez. Spread incluído; ausência de comissões, swaps e impacto real de mercado. A perda efetiva pode exceder 0,5% em gaps. O bloqueio diário impede novas entradas, mas não liquida posições já abertas. Os dados são salvos localmente no navegador; se limpar os dados do site ou usar outro dispositivo, o histórico não será transferido. Não há servidor nem conta de corretora.</footer>
-</main><script>
-"use strict";
-// Motor V1: totalmente local. Preços artificiais, nunca preços reais de Forex.
-const STORAGE_KEY='forex-bot-pro-v1-mobile-state';
-const START_MS=Date.UTC(2026,10,3,0,0,0);
-const INITIAL=100, RISK=.005, DAILY=.02, SPREAD=.00012, LEVERAGE=20;
-const $=id=>document.getElementById(id);
-const fmt=(v,n=2)=>Number(v).toLocaleString('pt-BR',{minimumFractionDigits:n,maximumFractionDigits:n});
-const usd=v=>'US$ '+fmt(v);
-const rnd=(n,d=6)=>Number(n.toFixed(d));
-let timer=null,busy=false;
-function fresh(){return {version:2,seed:20261103,index:0,pair:'EUR/USD',initial_balance:INITIAL,balance:INITIAL,risk_fraction:RISK,daily_loss_fraction:DAILY,spread:SPREAD,max_leverage:LEVERAGE,candles:[],position:null,trades:[],events:[],day_key:'2026-11-03',day_start_equity:INITIAL,status:'Aguardando candles simulados'};}
-function load(){try{const obj=JSON.parse(localStorage.getItem(STORAGE_KEY));if(obj&&obj.version===2&&Array.isArray(obj.candles)&&Array.isArray(obj.trades)&&Number.isFinite(obj.balance)&&Number.isFinite(obj.index))return obj;}catch(e){}return fresh();}
-let state=load(),storageOkay=true;
-function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));storageOkay=true;}catch(e){storageOkay=false;}}
-function mulberry32(seed){return function(){let t=seed+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296;};}
-function gaussian(rng,mean=0,std=1){let u=1-rng(),v=rng();return mean+std*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
-function synthetic(s){const i=s.index,rand=mulberry32((s.seed+i*1009)>>>0);const prev=s.candles.length?s.candles.at(-1).close:1.085;
-  const trend=.000115*Math.sin(i/24)+.00006*Math.sin(i/87);
-  const close=Math.max(.1,prev+trend+gaussian(rand,0,.00024));
-  const up=Math.abs(gaussian(rand,.00010,.000055)),down=Math.abs(gaussian(rand,.00010,.000055));
-  return {time:new Date(START_MS+i*900000).toISOString(),open:rnd(prev),high:rnd(Math.max(prev,close)+up),low:rnd(Math.min(prev,close)-down),close:rnd(close)};
-}
-function ema(vals,n){if(vals.length<n)return null;let avg=vals.slice(0,n).reduce((a,b)=>a+b,0)/n,k=2/(n+1);for(let i=n;i<vals.length;i++)avg=k*vals[i]+(1-k)*avg;return avg;}
-function rsi(vals,n=14){if(vals.length<=n)return null;let gain=0,loss=0;for(let i=vals.length-n;i<vals.length;i++){const d=vals[i]-vals[i-1];gain+=Math.max(0,d);loss+=Math.max(0,-d);}if(loss===0)return gain>0?100:50;return 100-100/(1+gain/loss);}
-function atr(c,n=14){if(c.length<n+1)return null;let sum=0;for(let i=c.length-n;i<c.length;i++){const v=c[i],prev=c[i-1];sum+=Math.max(v.high-v.low,Math.abs(v.high-prev.close),Math.abs(v.low-prev.close));}return sum/n;}
-function equity(s,mid){let e=s.balance,p=s.position;if(p){mid=mid??s.candles.at(-1).close;const exit=mid+(p.side==='BUY'?-SPREAD/2:SPREAD/2);e+=(exit-p.entry)*p.units*(p.side==='BUY'?1:-1);}return e;}
-function log(s,message){s.events.push({index:s.index,message});if(s.events.length>100)s.events.splice(0,s.events.length-100);}
-function closePos(s,c,price,reason){const p=s.position, pnl=(price-p.entry)*p.units*(p.side==='BUY'?1:-1);s.balance=rnd(s.balance+pnl);s.trades.push({...p,exit_time:c.time,exit:rnd(price),pnl:rnd(pnl),reason});s.position=null;log(s,`${p.side} fechado (${reason}): ${pnl>=0?'+':''}${pnl.toFixed(2)} USD`);}
-function step(s){const c=synthetic(s);s.index++;s.candles.push(c);if(s.candles.length>600)s.candles.shift();const today=c.time.slice(0,10);
-  if(today!==s.day_key){s.day_key=today;s.day_start_equity=equity(s,c.open);}
-  s.status='Monitorando EUR/USD sintético';const p=s.position;
-  if(p){if(p.side==='BUY'){
-    if(c.low-SPREAD/2<=p.stop)closePos(s,c,Math.min(p.stop,c.open-SPREAD/2),'Stop Loss');
-    else if(c.high-SPREAD/2>=p.target)closePos(s,c,c.open-SPREAD/2>=p.target?c.open-SPREAD/2:p.target,'Take Profit');
-  }else{
-    if(c.high+SPREAD/2>=p.stop)closePos(s,c,Math.max(p.stop,c.open+SPREAD/2),'Stop Loss');
-    else if(c.low+SPREAD/2<=p.target)closePos(s,c,c.open+SPREAD/2<=p.target?c.open+SPREAD/2:p.target,'Take Profit');
-  }}
-  const closes=s.candles.map(c=>c.close),fast=ema(closes,9),slow=ema(closes,21),momentum=rsi(closes),volatility=atr(s.candles);
-  const canTrade=equity(s)>0&&equity(s)>s.day_start_equity*(1-DAILY);
-  if(!canTrade)s.status='Limite de perda diária alcançado — novas entradas bloqueadas';
-  if(!s.position&&closes.length>22&&canTrade&&volatility){let side=null;const pf=ema(closes.slice(0,-1),9),ps=ema(closes.slice(0,-1),21);
-    if(pf<=ps&&fast>slow&&momentum>=45&&momentum<=75)side='BUY';
-    else if(pf>=ps&&fast<slow&&momentum>=25&&momentum<=55)side='SELL';
-    if(side){const entry=c.close+(side==='BUY'?SPREAD/2:-SPREAD/2),dist=Math.max(volatility*1.5,.00035);
-      const stop=entry+(side==='BUY'?-dist:dist),target=entry+(side==='BUY'?2*dist:-2*dist);
-      const riskUsd=Math.max(0,s.balance)*RISK;
-      const units=Math.floor(Math.min(riskUsd/dist,Math.max(0,equity(s))*LEVERAGE/entry));
-      if(units>=1){s.position={side,entry_time:c.time,entry:rnd(entry),stop:rnd(stop),target:rnd(target),units,planned_risk_usd:rnd(units*dist,4),risk_budget_usd:rnd(riskUsd,4)};log(s,`${side} ${units} EUR @ ${entry.toFixed(5)}; risco planejado $${(units*dist).toFixed(2)}`);}
-    }
-  }
-  return s;
-}
-function snapshot(s){const closes=s.candles.map(c=>c.close),win=s.trades.filter(t=>t.pnl>0).length,e=equity(s),u=e-s.balance;
-  const f=ema(closes,9),l=ema(closes,21),m=rsi(closes),v=atr(s.candles);
-  return {...s,equity:rnd(e,4),unrealized_pnl:rnd(u,4),total_pnl:rnd(e-INITIAL,4),win_rate:s.trades.length?rnd(win*100/s.trades.length,2):0,ema9:f===null?null:rnd(f),ema21:l===null?null:rnd(l),rsi14:m===null?null:rnd(m,2),atr14:v===null?null:rnd(v),max_risk_per_trade_usd:rnd(Math.max(0,s.balance)*RISK,4)};
-}
-function setText(id,value){$(id).textContent=value;}
-function draw(candles){const canvas=$('chart'),ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);ctx.fillStyle='#11192c';ctx.fillRect(0,0,W,H);const data=candles.slice(-100);if(!data.length){ctx.fillStyle='#aabbd9';ctx.fillText('Clique em +24 candles para começar',30,45);return;}const lo=Math.min(...data.map(x=>x.low)),hi0=Math.max(...data.map(x=>x.high)),hi=hi0===lo?lo+.001:hi0;const y=v=>20+(hi-v)/(hi-lo)*(H-40);for(let i=0;i<5;i++){const yy=20+i*(H-40)/4;ctx.strokeStyle='#26334b';ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(W,yy);ctx.stroke();ctx.fillStyle='#93a5c3';ctx.fillText((hi-(hi-lo)*i/4).toFixed(5),7,yy-5);}let st=W/data.length;data.forEach((c,i)=>{const x=(i+.5)*st,up=c.close>=c.open;ctx.strokeStyle=ctx.fillStyle=up?'#4fdbad':'#fa7e8a';ctx.beginPath();ctx.moveTo(x,y(c.high));ctx.lineTo(x,y(c.low));ctx.stroke();const y1=y(Math.max(c.open,c.close)),y2=y(Math.min(c.open,c.close));ctx.fillRect(x-Math.max(1,st*.25),y1,Math.max(2,st*.5),Math.max(1,y2-y1));});}
-function render(s){setText('balance',usd(s.balance));setText('equity',usd(s.equity));setText('pnl',(s.total_pnl>=0?'+':'')+usd(s.total_pnl));$('pnl').className='number '+(s.total_pnl>=0?'positive':'negative');setText('trades',s.trades.length+' / '+fmt(s.win_rate,1)+'%');
-  setText('lastPrice',s.candles.length?'Último preço sintético: '+fmt(s.candles.at(-1).close,5)+' | '+s.candles.at(-1).time.replace('T',' ').slice(0,16)+' UTC | '+s.index+' candles':'Aguardando a primeira vela');
-  setText('status',s.status+(storageOkay?' · Histórico salvo no aparelho':' · Atenção: sem permissão para salvar histórico'));setText('ema',s.ema9===null?'—':fmt(s.ema9,5)+' / '+fmt(s.ema21,5));setText('indicators',s.rsi14===null?'—':fmt(s.rsi14,1)+' / '+fmt(s.atr14,5));setText('risk',usd(s.max_risk_per_trade_usd));
-  const p=s.position;setText('position',p?`${p.side} ${p.units} EUR | entrada ${fmt(p.entry,5)} | SL ${fmt(p.stop,5)} | TP ${fmt(p.target,5)} | P/L não realizado ${usd(s.unrealized_pnl)}`:'Nenhuma posição aberta');
-  const rows=s.trades.slice(-25).reverse();$('history').innerHTML=rows.length?rows.map(t=>`<tr><td>${t.entry_time.slice(0,16).replace('T',' ')}</td><td>${t.side}</td><td>${t.units}</td><td>${fmt(t.entry,5)}</td><td>${fmt(t.exit,5)}</td><td>${t.reason}</td><td class="${t.pnl>=0?'positive':'negative'}">${t.pnl>=0?'+':''}${fmt(t.pnl)}</td></tr>`).join(''):'<tr><td colspan="7">Nenhuma operação ainda</td></tr>';
-  $('events').innerHTML=s.events.length?s.events.slice(-15).reverse().map(e=>`<div>#${e.index} · ${e.message}</div>`).join(''):'Nenhum evento';draw(s.candles);
-}
-function lockButtons(disabled){document.querySelectorAll('button[data-count]').forEach(b=>b.disabled=disabled);}
-async function advance(count){if(busy)return;busy=true;lockButtons(true);try{for(let i=0;i<count;i++){step(state);if(i%150===149)await new Promise(resolve=>requestAnimationFrame(resolve));}save();render(snapshot(state));}catch(e){setText('status','Erro na simulação: '+e.message);}finally{busy=false;lockButtons(false);}}
-function stop(){clearInterval(timer);timer=null;setText('auto','▶ Iniciar avanço automático');}
-document.querySelectorAll('button[data-count]').forEach(b=>b.addEventListener('click',()=>advance(Number(b.dataset.count))));
-$('reset').addEventListener('click',()=>{if(confirm('Apagar todas as operações desta simulação neste aparelho?')){stop();state=fresh();save();render(snapshot(state));}});
-$('auto').addEventListener('click',()=>{if(timer){stop();return;}setText('auto','■ Parar avanço automático');timer=setInterval(()=>advance(1),600);});
-$('export').addEventListener('click',()=>{const fields=['entry_time','side','units','entry','stop','target','exit_time','exit','reason','pnl'];const csv=[fields.join(','),...state.trades.map(t=>fields.map(f=>String(t[f]??'').replaceAll('"','""')).map(v=>'"'+v+'"').join(','))].join('\r\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='forex_bot_pro_v1_historico.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);});
-render(snapshot(state));
-</script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="0;url=./v2/">
+<title>Forex Bot Pro V2</title>
+<script>location.replace("./v2/");</script>
+</head>
+<body>
+<p>Redirecionando para o <a href="./v2/">Forex Bot Pro V2</a>.</p>
+<p>O <a href="./v1.html">simulador V1</a> continua disponível.</p>
+</body>
+</html>
