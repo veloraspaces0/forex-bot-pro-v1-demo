@@ -854,3 +854,16 @@ test("oversized GitHub response is rejected before body read",async()=>{
   assert.ok(codes(out.report).includes("GITHUB_STATE_RESPONSE_TOO_LARGE"));
   assert.equal(bodyRead,false);
 });
+
+test("chunked oversized GitHub JSON without content-length is bounded",async()=>{
+  let cancelled=false,reads=0;
+  const fake=async()=>({ok:true,status:200,headers:{get:()=>null},body:{
+    getReader:()=>({read:async()=>{reads++;return {done:false,value:new Uint8Array(700000)};},
+      cancel:async()=>{cancelled=true;}})
+  }});
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_RESPONSE_TOO_LARGE"));
+  assert.equal(cancelled,true);
+  assert.ok(reads<=3,"stream must stop before unbounded reads");
+});
