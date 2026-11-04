@@ -8,6 +8,7 @@ import time
 import sys
 import urllib.request
 import urllib.error
+import urllib.parse
 from zoneinfo import ZoneInfo
 
 REPO = "veloraspaces0/forex-bot-pro-v1-demo"
@@ -26,7 +27,10 @@ def fetch_json(url, attempts=3):
         "Accept": "application/vnd.github+json",
         "User-Agent": "forex-v211-readonly-diagnostics",
     }
-    if url.startswith(f"https://api.github.com/repos/{REPO}/") and os.getenv("GITHUB_TOKEN"):
+    parsed_url = urllib.parse.urlsplit(url)
+    allowed_path = f"/repos/{REPO}/"
+    if (parsed_url.scheme == "https" and parsed_url.netloc == "api.github.com"
+            and parsed_url.path.startswith(allowed_path) and os.getenv("GITHUB_TOKEN")):
         headers["Authorization"] = "Bearer " + os.environ["GITHUB_TOKEN"]
     request = urllib.request.Request(url, headers=headers)
     if type(attempts) is not int or not 1 <= attempts <= 5:
@@ -36,8 +40,9 @@ def fetch_json(url, attempts=3):
             with urllib.request.urlopen(request, timeout=15) as response:
                 return json.load(response)
         except urllib.error.HTTPError as exc:
-            remaining = exc.headers.get("x-ratelimit-remaining")
-            retry_after = exc.headers.get("retry-after")
+            error_headers = exc.headers or {}
+            remaining = error_headers.get("x-ratelimit-remaining")
+            retry_after = error_headers.get("retry-after")
             transient = exc.code in (429, 500, 502, 503, 504) or (exc.code == 403 and (remaining == "0" or retry_after is not None))
             if not transient or attempt == attempts - 1:
                 raise
@@ -80,9 +85,11 @@ def fetch_workflow_runs(base, max_pages=5):
             raise ValueError("Workflow page exceeds per_page=100")
         if payload["total_count"] != expected:
             pagination_anomalies.append("total_count_changed")
+        if expected == 0 and batch:
+            pagination_anomalies.append("nonempty_page_with_zero_total")
         if not batch and len(all_runs) < expected:
             pagination_anomalies.append("unexpected_empty_page")
-        if len(batch) == 100 and all(item.get("id") in seen_ids for item in batch if isinstance(item, dict)):
+        if len(batch) == 100 and all(isinstance(item, dict) and item.get("id") in seen_ids for item in batch):
             pagination_anomalies.append("duplicate_page")
         for item in batch:
             if not isinstance(item, dict):
@@ -120,7 +127,7 @@ def valid_age(now, stamp, report, field):
 def diagnose(runs, state, now):
     if not isinstance(runs, list) or not isinstance(state, dict):
         raise ValueError("Invalid diagnostic input types")
-    if not isinstance(now, dt.datetime) or now.tzinfo is None:
+    if not isinstance(now, dt.datetime) or now.tzinfo is None or now.utcoffset() is None:
         raise ValueError("now must be timezone-aware")
     now = now.astimezone(UTC)
     if any(not isinstance(r, dict) for r in runs):
@@ -165,6 +172,8 @@ def diagnose(runs, state, now):
                                    "newer_run": a.get("html_url")})
     for r in scheduled:
         created = parse_time(r["created_at"])
+        if created > now + dt.timedelta(minutes=2):
+            report["anomalies"].append({"type": "future_run_created_at", "run": r.get("html_url")})
         started = parse_time(r["run_started_at"]) if r.get("run_started_at") else None
         if started is not None and started < created:
             target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
@@ -177,20 +186,23 @@ def diagnose(runs, state, now):
                 report[target].append({"type": "runner_queue_delay",
                                        "minutes": queue_delay, "run": r.get("html_url")})
         if r.get("conclusion") == "success" and r.get("status") not in (None, "completed"):
-            report["anomalies"].append({"type": "inconsistent_run_status", "run": r.get("html_url")})
+            target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
+            report[target].append({"type": "inconsistent_run_status", "run": r.get("html_url")})
         if r.get("status") in ("queued", "in_progress", "waiting", "pending", "requested"):
             if (now - created).total_seconds() > 20 * 60:
                 target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
                 report[target].append({"type": "run_not_completed", "run": r.get("html_url"),
                                        "status": r["status"]})
         if r.get("status") == "completed" and r.get("conclusion") is None:
-            report["anomalies"].append({"type": "missing_run_conclusion", "run": r.get("html_url")})
+            target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
+            report[target].append({"type": "missing_run_conclusion", "run": r.get("html_url")})
         if r.get("conclusion") in ("failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale", "skipped"):
             target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
             report[target].append({"type": "workflow_failure", "run": r.get("html_url"),
                                    "conclusion": r["conclusion"]})
     report["max_queue_delay_minutes"] = max(report["queue_delays_minutes"], default=None)
-    successful = [r for r in scheduled if r.get("conclusion") == "success"
+    successful = [r for r in scheduled if parse_time(r["created_at"]) <= now + dt.timedelta(minutes=2)
+                  and r.get("conclusion") == "success"
                   and r.get("status", "completed") == "completed"]
     if scheduled and not successful:
         report["anomalies"].append({"type": "no_successful_scheduled_runs"})
