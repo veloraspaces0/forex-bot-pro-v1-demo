@@ -18,3 +18,9 @@ ALERT_MODE = "observe"
 # id = "REPLACE_WITH_YOUR_NAMESPACE_ID"
 # npx wrangler secret put TELEGRAM_BOT_TOKEN --config experimentos/wrangler_v23.toml
 # npx wrangler secret put TELEGRAM_CHAT_ID --config experimentos/wrangler_v23.toml
+
+# Independent watchdog for THIS Worker, separate from GitHub/Cloudflare:
+# Create a Healthchecks.io check with a 15-minute expected period, grace e.g. 20 minutes.
+# Keep its UUID ping URL SECRET; configure via Wrangler secret (NEVER commit):
+# npx wrangler secret put MONITOR_HEARTBEAT_URL --config experimentos/wrangler_v23.toml
+# ALERT_MODE remains observe until external services are explicitly configured and tested.
