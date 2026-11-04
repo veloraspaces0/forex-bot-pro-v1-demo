@@ -305,7 +305,25 @@ export async function readPublic(now=Date.now(), fetcher=fetch, token=null) {
             "User-Agent":"Forex-Watch-V2.3.3"},cache:"no-store",redirect:"error",
             signal:fallbackController.signal});
           if(!response.ok) throw error; // preserve the REST diagnostic
-          body=await response.text();
+          const length=Number(response.headers?.get?.("content-length"));
+          if(Number.isFinite(length)&&length>MAX_API_BYTES)
+            throw new Error("GITHUB_STATE_RESPONSE_TOO_LARGE");
+          if(response.body?.getReader){
+            const reader=response.body.getReader();
+            const chunks=[];let size=0;
+            try {
+              while(true){
+                const {done,value}=await reader.read();
+                if(done) break;
+                size+=value.byteLength;
+                if(size>MAX_API_BYTES) throw new Error("GITHUB_STATE_RESPONSE_TOO_LARGE");
+                chunks.push(value);
+              }
+            } finally {await reader.cancel().catch(()=>{});}
+            const all=new Uint8Array(size);let offset=0;
+            for(const chunk of chunks){all.set(chunk,offset);offset+=chunk.byteLength;}
+            body=new TextDecoder().decode(all);
+          } else body=await response.text();
         } catch(fallbackError) {
           if(fallbackError?.name==="AbortError")
             throw new Error("GITHUB_STATE_RAW_TIMEOUT");
