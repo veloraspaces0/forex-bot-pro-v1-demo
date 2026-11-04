@@ -204,8 +204,26 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
         const contentLength=Number(response.headers?.get?.("content-length"));
         if(Number.isFinite(contentLength) && contentLength>MAX_API_BYTES)
           throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
-        const body=await response.text();
-        if(body.length>MAX_API_BYTES) throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
+        let body;
+        if(response.body?.getReader){
+          const reader=response.body.getReader();
+          const chunks=[]; let size=0;
+          try {
+            while(true){
+              const {done,value}=await reader.read();
+              if(done) break;
+              size+=value.byteLength;
+              if(size>MAX_API_BYTES) throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
+              chunks.push(value);
+            }
+          } finally {await reader.cancel().catch(()=>{});}
+          const all=new Uint8Array(size);let offset=0;
+          for(const chunk of chunks){all.set(chunk,offset);offset+=chunk.byteLength;}
+          body=new TextDecoder().decode(all);
+        } else {
+          body=await response.text();
+          if(body.length>MAX_API_BYTES) throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
+        }
         try{return JSON.parse(body);}
         catch {throw new Error("GITHUB_"+resource+"_INVALID_JSON");}
       }
