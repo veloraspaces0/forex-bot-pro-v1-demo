@@ -214,7 +214,7 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
       if(response.status===403){
         try {hint=(await response.text()).slice(0,2048).toLowerCase();} catch {}
       }
-      const secondary=/secondary rate limit|abuse detection|secondary-rate-limit/.test(hint);
+      const secondary=/secondary rate limit|abuse detection|secondary-rate-limit|api rate limit exceeded|rate limit exceeded/.test(hint);
       const limited=(response.status===403 || response.status===429) &&
         (remaining==="0" || retryAfter!==null && retryAfter!==undefined || secondary || response.status===429);
       const code="GITHUB_"+resource+"_HTTP_"+response.status+
