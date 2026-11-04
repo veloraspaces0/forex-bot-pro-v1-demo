@@ -113,7 +113,7 @@ test("upstream GitHub outage => INDETERMINADO, not bot failed",async()=>{
   const unavailable=async()=>{count++;return new Response("unavailable",{status:403})};
   const out=await runCheck({},NOW,unavailable);
   assert.equal(out.report.status,"INDETERMINADO");
-  assert.ok(codes(out.report).includes("MONITOR_UNAVAILABLE"));
+  assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403"));
   assert.ok(count>0);
 });
 
@@ -219,6 +219,37 @@ test("HTTP 429 upstream retried once with no false bot failure",async()=>{
   const out=await readPublic(NOW,fake);
   assert.equal(out.status,"OK");
   assert.deepEqual([...calls.values()].sort(),[2,2]);
+});
+test("workflow HTTP 403 reports source and status without blaming bot",async()=>{
+  const fake=async url=>new Response(
+    String(url).includes("/contents/")
+      ? JSON.stringify({encoding:"base64",content:Buffer.from(JSON.stringify(state())).toString("base64")})
+      : "forbidden",{status:String(url).includes("/contents/")?200:403});
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_RUNS_HTTP_403"));
+});
+test("optional GitHub read token is sent in header, never URL or status",async()=>{
+  const token="FAKE_TEST_SECRET_NOT_REAL", seen=[];
+  const fake=async (url,options={})=>{
+    seen.push({url:String(url),auth:options.headers.Authorization});
+    return new Response(JSON.stringify(String(url).includes("/contents/")
+      ?{encoding:"base64",content:Buffer.from(JSON.stringify(state())).toString("base64")}
+      :{workflow_runs:runs()}),{status:200});
+  };
+  const out=await readPublic(NOW,fake,token);
+  assert.equal(out.status,"OK");
+  assert.equal(seen.length,2);
+  assert.ok(seen.every(x=>x.auth==="Bearer "+token));
+  assert.ok(seen.every(x=>!x.url.includes(token)));
+  assert.ok(!JSON.stringify(out).includes(token));
+});
+test("malformed GitHub JSON identifies which source broke",async()=>{
+  const bad=async url=>new Response(
+    String(url).includes("/contents/")?"{broken":"{}",{status:200});
+  const out=await runCheck({},NOW,bad);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_INVALID_JSON"));
 });
 test("older than 90min no workflow detected as critical",()=>{
   const r=assess(state(90,90),runs([90,105,120,135]),NOW);
