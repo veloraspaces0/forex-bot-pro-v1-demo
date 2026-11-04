@@ -36,6 +36,7 @@ jobs:
               'recent_scheduled_runs':r.get('recent_scheduled_runs'),
               'historical_scheduled_runs':r.get('historical_scheduled_runs'),
               'max_queue_delay_minutes':r.get('max_queue_delay_minutes'),
+              'recent_schedule_gaps':r.get('recent_schedule_gaps'),
               'last_run_age_minutes':r.get('last_run_age_minutes'),
               'last_success_age_minutes':r.get('last_success_age_minutes'),
               'state_age_minutes':r.get('state_age_minutes'),
