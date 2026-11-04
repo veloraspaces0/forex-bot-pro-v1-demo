@@ -239,7 +239,7 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
       const msg=String(error?.message||"");
       const code=error?.name==="AbortError"?"GITHUB_"+resource+"_TIMEOUT":
         /^GITHUB_/.test(msg)?msg:"GITHUB_"+resource+"_NETWORK_ERROR";
-      if(n===FETCH_ATTEMPTS-1 || /HTTP_(401|403|404)|INVALID_JSON|RESPONSE_TOO_LARGE/.test(code))
+      if(n===FETCH_ATTEMPTS-1 || /HTTP_(401|404)|HTTP_403(?!_RATE_LIMIT)|INVALID_JSON|RESPONSE_TOO_LARGE/.test(code))
         throw new Error(code);
       await pause(retryDelay);
     } finally {clearTimeout(timer);}
