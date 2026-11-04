@@ -481,5 +481,18 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         self.assertEqual(len(result["recent_schedule_gaps"]), 1)
         self.assertEqual(result["recent_schedule_gaps"][0]["gap_minutes"], 175.0)
 
+
+    def test_cron_slot_dispatch_offset_at_expected_minute(self):
+        r = run(5)
+        r["created_at"] = "2026-11-04T21:37:00Z"
+        result = diagnose([r], state(5), NOW)
+        self.assertEqual(result["max_dispatch_offset_minutes"], 0.0)
+
+    def test_cron_slot_dispatch_offset_late_run(self):
+        r = run(5)
+        r["created_at"] = "2026-11-04T21:42:30Z"
+        result = diagnose([r], state(5), NOW)
+        self.assertEqual(result["max_dispatch_offset_minutes"], 5.5)
+
 if __name__ == "__main__":
     unittest.main()
