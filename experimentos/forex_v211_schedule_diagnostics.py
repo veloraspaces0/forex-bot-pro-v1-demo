@@ -62,12 +62,11 @@ def fetch_workflow_runs(base, max_pages=5):
             if not isinstance(item, dict):
                 raise ValueError("Invalid workflow run entry")
             identifier = item.get("id")
-            if identifier is not None and (type(identifier) is not int or identifier <= 0):
-                raise ValueError("Invalid workflow run ID")
-            if identifier is not None:
-                if identifier in seen_ids:
-                    continue
-                seen_ids.add(identifier)
+            if type(identifier) is not int or identifier <= 0:
+                raise ValueError("Missing or invalid workflow run ID")
+            if identifier in seen_ids:
+                continue
+            seen_ids.add(identifier)
             all_runs.append(item)
         if len(all_runs) > expected:
             pagination_anomalies.append("more_unique_runs_than_total_count")
@@ -100,6 +99,9 @@ def diagnose(runs, state, now):
     now = now.astimezone(UTC)
     if any(not isinstance(r, dict) for r in runs):
         raise ValueError("Invalid workflow run item")
+    if any(r.get("event") == "schedule" and r.get("head_branch") == "main"
+           and not isinstance(r.get("created_at"), str) for r in runs):
+        raise ValueError("Missing scheduled run creation timestamp")
     scheduled = sorted(
         (r for r in runs if r.get("head_branch") == "main"
          and r.get("event") == "schedule"),
@@ -119,12 +121,14 @@ def diagnose(runs, state, now):
         created = parse_time(r["created_at"])
         started = parse_time(r["run_started_at"]) if r.get("run_started_at") else None
         if started is not None and started < created:
-            report["anomalies"].append({"type": "inconsistent_run_timestamps", "run": r.get("html_url")})
+            target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
+            report[target].append({"type": "inconsistent_run_timestamps", "run": r.get("html_url")})
         if started is not None and started >= created:
             queue_delay = round((started - created).total_seconds() / 60, 2)
             if queue_delay > 10:
-                report["anomalies"].append({"type": "runner_queue_delay",
-                                            "minutes": queue_delay, "run": r.get("html_url")})
+                target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
+                report[target].append({"type": "runner_queue_delay",
+                                       "minutes": queue_delay, "run": r.get("html_url")})
         if r.get("conclusion") == "success" and r.get("status") not in (None, "completed"):
             report["anomalies"].append({"type": "inconsistent_run_status", "run": r.get("html_url")})
         if r.get("status") in ("queued", "in_progress", "waiting", "pending", "requested"):
