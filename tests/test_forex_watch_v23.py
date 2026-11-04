@@ -206,6 +206,15 @@ class V23Hardening(unittest.TestCase):
         self.assertIn("actions/workflows/forex-v2.yml/runs?",watch.RUNS_ENDPOINT)
         self.assertNotEqual(watch.RUNS_ENDPOINT,"actions/runs?branch=main&per_page=100")
 
+    def test_running_without_start_time_does_not_claim_stuck(self):
+        rr=runs(ages=(65,80,95,110))
+        rr[0]["status"]="in_progress"
+        rr[0]["conclusion"]=None
+        rr[0].pop("run_started_at",None)
+        out=watch.assess(state(),rr,NOW)
+        self.assertIn("RUN_START_UNKNOWN",reasons(out))
+        self.assertNotIn("RUN_STUCK",reasons(out))
+
     def test_http_429_retry_and_recovery(self):
         count=[]
         sleeps=[]
