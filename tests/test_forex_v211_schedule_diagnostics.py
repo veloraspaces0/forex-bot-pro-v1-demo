@@ -43,5 +43,30 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         result = diagnose([other, run(10)], state(10), NOW)
         self.assertEqual(result["scheduled_runs"], 1)
 
+
+    def test_missing_state_timestamp_is_reported(self):
+        s = state(5)
+        del s["last_checked_at"]
+        result = diagnose([run(5)], s, NOW)
+        self.assertIn("missing_state_timestamp", {a["type"] for a in result["anomalies"]})
+
+    def test_queue_delay_is_separate_from_scheduler_gap(self):
+        r = run(20)
+        r["run_started_at"] = (NOW - dt.timedelta(minutes=5)).isoformat()
+        result = diagnose([r], state(5), NOW)
+        types = {a["type"] for a in result["anomalies"]}
+        self.assertIn("runner_queue_delay", types)
+        self.assertNotIn("schedule_interval", types)
+
+    def test_timezone_naive_now_is_rejected(self):
+        with self.assertRaises(ValueError):
+            diagnose([run(5)], state(5), NOW.replace(tzinfo=None))
+
+    def test_missing_runs_does_not_claim_no_position(self):
+        result = diagnose([], state(40), NOW)
+        types = {a["type"] for a in result["anomalies"]}
+        self.assertIn("no_scheduled_runs_in_response", types)
+        self.assertIn("critical_open_position_unchecked", types)
+
 if __name__ == "__main__":
     unittest.main()
