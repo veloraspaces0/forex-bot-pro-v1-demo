@@ -7,6 +7,7 @@ This local CLI is complementary to the independent Cloudflare Worker prototype.
 import argparse
 import base64
 import json
+import math
 import sys
 import time
 import urllib.error
@@ -58,8 +59,17 @@ def assess(state, runs, now):
     now = utc(now)
     if not isinstance(state, dict) or not isinstance(runs, list):
         raise ValueError("resposta JSON com estrutura inválida")
-    if state.get("mode") not in (None, "PAPER_ONLY"):
-        raise ValueError("modo diferente de PAPER_ONLY")
+    if state.get("mode") != "PAPER_ONLY" or state.get("pair") != "EUR/USD" or state.get("interval") != "15min":
+        raise ValueError("PUBLIC_STATE_SCHEMA_INVALID")
+    if type(state.get("open_position")) is not bool:
+        raise ValueError("PUBLIC_STATE_SCHEMA_INVALID")
+    if type(state.get("closed_trades")) is not int or state["closed_trades"] < 0:
+        raise ValueError("PUBLIC_STATE_SCHEMA_INVALID")
+    if type(state.get("risk_violations")) is not int or state["risk_violations"] < 0:
+        raise ValueError("PUBLIC_STATE_SCHEMA_INVALID")
+    if any(type(state.get(k)) not in (float, int) or not math.isfinite(state[k])
+           for k in ("balance", "estimated_equity")):
+        raise ValueError("PUBLIC_STATE_SCHEMA_INVALID")
     issues = []
     def flag(severity, code, message, **details):
         issues.append({"severity": severity, "code": code, "message": message, **details})
@@ -122,6 +132,8 @@ def assess(state, runs, now):
             flag("ATENCAO", "CANDLE_DELAY", "Último candle tem mais de 35 min durante sessão aberta.", age_min=candle_age)
     if state.get("gap_halt") is True or state.get("status") in {"data_gap", "gap_halt"}:
         flag("CRITICO", "DATA_GAP", "Bloqueio por lacuna de candles.")
+    if state["risk_violations"] > 0:
+        flag("CRITICO", "RISK_VIOLATIONS", "Histórico público indica violação do risco planejado.")
     if state.get("status") == "api_error":
         flag("CRITICO" if position or (check_age is not None and check_age > 30) else "ATENCAO",
              "API_ERROR", "Estado público registra erro da API; causa exata requer logs.")
