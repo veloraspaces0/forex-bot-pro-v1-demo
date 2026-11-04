@@ -8,6 +8,10 @@ workers_dev = false
 [triggers]
 crons = ["*/15 * * * *"]
 
+# Explicit safety gate: no Telegram alerts until user changes this locally.
+[vars]
+ALERT_MODE = "observe"
+
 # Optional notifications require a KV binding and Wrangler secrets:
 # [[kv_namespaces]]
 # binding = "INCIDENT_KV"
