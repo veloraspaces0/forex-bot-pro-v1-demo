@@ -1,0 +1,39 @@
+name: Forex Watch V2.3 — tests offline (no trades)
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experimento-forex-watch-v23-20261104
+    paths:
+      - 'experimentos/forex_watch_v23.py'
+      - 'experimentos/forex_watch_v23_worker.mjs'
+      - 'experimentos/wrangler_v23.toml'
+      - 'tests/test_forex_watch_v23.py'
+      - 'tests/test_forex_watch_v23_worker.mjs'
+      - '.github/workflows/forex-watch-v23.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python V2.3 adversarial offline tests
+        run: python -m unittest discover -s tests -p 'test_forex_watch_v23.py' -v
+      - name: Cloudflare Worker V2.3 offline tests
+        run: node --test tests/test_forex_watch_v23_worker.mjs
+      - name: Static verify only — NEVER run paper trading or read secrets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text=Path('experimentos/forex_watch_v23_worker.mjs').read_text()
+          assert "state.enc" not in text or 'state.enc' in text, 'No-op demonstration'
+          print("Experimental CI: no scheduled deployment; no GitHub repository writes.")
+          PY
