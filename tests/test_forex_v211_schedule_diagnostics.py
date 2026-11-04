@@ -1,7 +1,9 @@
 import datetime as dt
 import unittest
+import io
+import urllib.error
 from unittest.mock import patch
-from experimentos.forex_v211_schedule_diagnostics import diagnose, fetch_workflow_runs, forex_market_open
+from experimentos.forex_v211_schedule_diagnostics import diagnose, fetch_workflow_runs, fetch_json, forex_market_open
 
 UTC = dt.timezone.utc
 NOW = dt.datetime(2026, 11, 4, 21, 20, tzinfo=UTC)
@@ -366,6 +368,34 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         r["run_started_at"] = (NOW - dt.timedelta(minutes=20)).isoformat()
         result = diagnose([r], state(5), NOW)
         self.assertIn("runner_queue_delay", {a["type"] for a in result["anomalies"]})
+
+
+    def test_http_429_retries_then_succeeds(self):
+        err = urllib.error.HTTPError("https://api.github.com/test", 429, "rate limit", {}, None)
+        response = io.BytesIO(b'{"ok": true}')
+        with patch("experimentos.forex_v211_schedule_diagnostics.urllib.request.urlopen",
+                   side_effect=[err, response]) as opened, patch(
+                   "experimentos.forex_v211_schedule_diagnostics.time.sleep") as sleeping:
+            self.assertEqual(fetch_json("https://api.github.com/test"), {"ok": True})
+        self.assertEqual(opened.call_count, 2)
+        sleeping.assert_called_once()
+
+    def test_http_403_without_rate_limit_does_not_retry(self):
+        err = urllib.error.HTTPError("https://api.github.com/test", 403, "forbidden", {}, None)
+        with patch("experimentos.forex_v211_schedule_diagnostics.urllib.request.urlopen",
+                   side_effect=err) as opened:
+            with self.assertRaises(urllib.error.HTTPError):
+                fetch_json("https://api.github.com/test")
+        self.assertEqual(opened.call_count, 1)
+
+    def test_http_503_retries_are_bounded(self):
+        err = urllib.error.HTTPError("https://api.github.com/test", 503, "unavailable", {}, None)
+        with patch("experimentos.forex_v211_schedule_diagnostics.urllib.request.urlopen",
+                   side_effect=err) as opened, patch(
+                   "experimentos.forex_v211_schedule_diagnostics.time.sleep"):
+            with self.assertRaises(urllib.error.HTTPError):
+                fetch_json("https://api.github.com/test")
+        self.assertEqual(opened.call_count, 3)
 
 if __name__ == "__main__":
     unittest.main()
