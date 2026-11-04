@@ -15,13 +15,15 @@
   "max_closed_drawdown_pct": 0.5,
   "max_risk_pct": 0.5,
   "daily_loss_limit_pct": 2,
+  "risk_violations": 0,
+  "gap_halt": false,
   "open_position": false,
   "position_side": null,
   "status": "monitoring",
   "message": "4 candles novos processados; simulação.",
-  "updated_at": "2026-11-04T12:36:28Z",
-  "last_checked_at": "2026-11-04T12:36:28Z",
-  "last_candle_at": "2026-11-04T12:15:00Z",
+  "updated_at": "2026-11-04T13:41:55Z",
+  "last_checked_at": "2026-11-04T13:41:55Z",
+  "last_candle_at": "2026-11-04T13:15:00Z",
   "equity_curve": [
     {
       "n": 0,
@@ -37,7 +39,9 @@
       "at": "2026-11-04T07:30:00Z",
       "side": "SELL",
       "pnl": -0.5,
-      "reason": "STOP"
+      "reason": "STOP",
+      "planned_risk_usd": 0.4994,
+      "risk_exceeded": false
     }
   ],
   "events": [
@@ -54,5 +58,5 @@
       "message": "Initialized indicators; no historical trades."
     }
   ],
-  "notice": "Paper-only estimates. No orders, no real fills. Published metrics exclude raw market candles."
+  "notice": "Paper estimates only. Gaps and variable costs may exceed planned risk; no real orders."
 }
