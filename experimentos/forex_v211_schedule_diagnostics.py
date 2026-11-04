@@ -24,6 +24,13 @@ def parse_time(value):
         raise ValueError("Timezone missing in timestamp")
     return parsed.astimezone(UTC)
 
+def valid_age(now, stamp, report, field):
+    age = round((now - parse_time(stamp)).total_seconds() / 60, 2)
+    if age < -2:
+        report["anomalies"].append({"type": "future_timestamp", "field": field, "minutes": age})
+        return None
+    return max(0.0, age)
+
 def diagnose(runs, state, now):
     if now.tzinfo is None:
         raise ValueError("now must be timezone-aware")
@@ -36,6 +43,8 @@ def diagnose(runs, state, now):
     )
     report = {"checked_at_utc": now.isoformat(), "scheduled_runs": len(scheduled),
               "intervals_minutes": [], "anomalies": []}
+    if len(runs) >= 100:
+        report["anomalies"].append({"type": "history_truncated", "note": "First page only; older gaps may be missing"})
     for a, b in zip(scheduled, scheduled[1:]):
         gap = round((parse_time(a["created_at"]) - parse_time(b["created_at"])).total_seconds()/60, 2)
         report["intervals_minutes"].append(gap)
@@ -45,7 +54,9 @@ def diagnose(runs, state, now):
     for r in scheduled:
         created = parse_time(r["created_at"])
         started = parse_time(r["run_started_at"]) if r.get("run_started_at") else None
-        if started is not None:
+        if started is not None and started < created:
+            report["anomalies"].append({"type": "inconsistent_run_timestamps", "run": r.get("html_url")})
+        if started is not None and started >= created:
             queue_delay = round((started - created).total_seconds() / 60, 2)
             if queue_delay > 10:
                 report["anomalies"].append({"type": "runner_queue_delay",
@@ -54,29 +65,33 @@ def diagnose(runs, state, now):
             report["anomalies"].append({"type": "workflow_failure", "run": r["html_url"],
                                         "conclusion": r["conclusion"]})
     if scheduled:
-        age = (now - parse_time(scheduled[0]["created_at"])).total_seconds()/60
-        report["last_run_age_minutes"] = round(age, 2)
-        if age > 30:
+        age = valid_age(now, scheduled[0]["created_at"], report, "last_run")
+        report["last_run_age_minutes"] = age
+        if age is not None and age > 30:
             report["anomalies"].append({"type": "run_late", "minutes": round(age, 2)})
-        if age > 75:
+        if age is not None and age > 75:
             report["anomalies"].append({"type": "run_missing", "minutes": round(age, 2)})
     else:
         report["anomalies"].append({"type": "no_scheduled_runs_in_response"})
     updated = state.get("last_checked_at") or state.get("updated_at")
     if updated:
-        age = (now - parse_time(updated)).total_seconds()/60
-        report["state_age_minutes"] = round(age, 2)
-        if age > 30:
+        age = valid_age(now, updated, report, "state")
+        report["state_age_minutes"] = age
+        if age is not None and age > 30:
             report["anomalies"].append({"type": "state_stale", "minutes": round(age, 2)})
-        if state.get("open_position") and age > 35:
+        if state.get("open_position") and age is not None and age > 35:
             report["anomalies"].append({"type": "critical_open_position_unchecked",
                                         "minutes": round(age, 2)})
     if not updated:
         report["anomalies"].append({"type": "missing_state_timestamp"})
+        if state.get("open_position"):
+            report["anomalies"].append({"type": "critical_open_position_unchecked", "reason": "missing_timestamp"})
     if state.get("status") == "api_error":
         report["anomalies"].append({"type": "api_error"})
     if state.get("gap_halt") or state.get("status") in ("data_gap", "gap_halt"):
         report["anomalies"].append({"type": "gap_halt_or_data_gap"})
+    if not scheduled and not runs:
+        report["anomalies"].append({"type": "history_unavailable_or_empty"})
     report["diagnostic_note"] = ("Schedule gaps do not prove whether GitHub omitted triggers, "
                                  "delayed dispatch, or queued jobs. Compare API run history "
                                  "and queue delays before attributing root cause.")
@@ -97,8 +112,12 @@ def main():
                 fetch_json(f"{base}/actions/workflows/{WORKFLOW}/runs?branch=main&per_page=100"))
         state = (json.load(open(args.state_file, encoding="utf-8")) if args.state_file else
                  fetch_json(f"https://raw.githubusercontent.com/{REPO}/main/v2/state.json"))
-        print(json.dumps(diagnose(runs["workflow_runs"], state, dt.datetime.now(UTC)),
-                         indent=2, ensure_ascii=False))
+        if not isinstance(runs, dict) or not isinstance(runs.get("workflow_runs"), list):
+            raise ValueError("Invalid GitHub workflow_runs payload")
+        if not isinstance(state, dict):
+            raise ValueError("Invalid state payload")
+        report = diagnose(runs["workflow_runs"], state, dt.datetime.now(UTC))
+        print(json.dumps(report, indent=2, ensure_ascii=False))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"VERIFICATION_FAILED: {exc}", file=sys.stderr)
         return 2
