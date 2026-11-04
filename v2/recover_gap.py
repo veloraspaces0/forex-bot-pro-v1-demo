@@ -88,6 +88,13 @@ def main(argv=None):
     parser.add_argument('--public',type=Path,help='Optional local derived summary; never upload raw quotes')
     args = parser.parse_args(argv)
     if args.apply:
+        repository = Path(__file__).resolve().parents[1]
+        if args.state.resolve().is_relative_to(repository):
+            parser.error('Recover only an offline STATE COPY outside the repository')
+        if args.snapshot.resolve().is_relative_to(repository):
+            parser.error('Keep raw quote snapshots OUTSIDE the repository')
+        if args.public and args.public.resolve().is_relative_to(repository):
+            parser.error('Write local summary OUTSIDE the repository')
         if not args.acknowledge_skipped_paper_trades or args.backup is None:
             parser.error('--apply requires --acknowledge-skipped-paper-trades and --backup')
         if args.backup.resolve() == args.state.resolve():
