@@ -1,16 +1,16 @@
 name: Forex Bot Pro V2 - Paper EURUSD
 
 on:
-  push:
-    paths:
-      - 'v2/*.py'
-      - 'v2/tests/**'
-      - '.github/workflows/forex-v2.yml'
   workflow_dispatch:
   schedule:
-    # 7 minutos apos o fechamento de cada candle de 15 minutos (UTC).
-    # GitHub Actions pode atrasar; nao e execucao de baixa latencia.
-    - cron: "7,22,37,52 * * * *"
+    # 7 minutes after a 15-minute boundary (UTC); GitHub may delay/drop runs.
+    - cron: '7,22,37,52 * * * *'
+  push:
+    paths:
+      - 'v2/paper_bot.py'
+      - 'v2/runner.py'
+      - 'tests/test_paper_bot.py'
+      - '.github/workflows/forex-v2.yml'
 
 permissions:
   contents: write
@@ -22,7 +22,7 @@ concurrency:
 jobs:
   paper:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,31 +32,39 @@ jobs:
       - name: Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
 
-      - name: Testes de seguranca e regressao
-        run: python -m unittest discover -s v2/tests -v
+      - name: Encryption dependency
+        run: python -m pip install 'cryptography>=43,<49'
 
-      - name: Atualizar paper trading EUR/USD
-        id: bot
-        continue-on-error: true
+      - name: Paper-trading engine tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Encrypted paper runner (no key = no operation)
         env:
           TWELVE_DATA_API_KEY: ${{ secrets.TWELVE_DATA_API_KEY }}
-        run: python v2/run.py
+          V2_STATE_ENCRYPTION_KEY: ${{ secrets.V2_STATE_ENCRYPTION_KEY }}
+        run: python v2/runner.py
 
-      - name: Publicar estado no repositorio
-        if: always() && steps.bot.outcome != 'skipped'
+      - name: Ensure public JSON excludes raw market data
         run: |
-          if git diff --quiet -- v2/state.json; then
-            echo "Estado sem alteracoes"
+          python - <<'PY'
+          import json
+          data=json.load(open('v2/state.json',encoding='utf-8'))
+          forbidden={'candles','last_quote','position','trades','apikey'}
+          assert not (forbidden & data.keys()), 'Public market data leak'
+          assert data['mode']=='PAPER_ONLY'
+          print('Public summary verified.')
+          PY
+
+      - name: Commit derived dashboard state and encrypted private state
+        run: |
+          git add -A -- v2/
+          if git diff --cached --quiet; then
+            echo "No changes"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add v2/state.json
-          git commit -m "data(v2): atualizar paper trading EUR/USD [skip ci]"
+          git commit -m "data(v2): update encrypted paper state [skip ci]"
           git push
-
-      - name: Sinalizar erro da API no workflow
-        if: steps.bot.outcome == 'failure'
-        run: exit 1
