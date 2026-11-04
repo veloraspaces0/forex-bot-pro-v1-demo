@@ -158,6 +158,8 @@ def diagnose(runs, state, now):
         report["anomalies"].append({"type": "invalid_risk_violations"})
     if type(state.get("risk_violations")) in (int, float) and state["risk_violations"] > 0:
         report["anomalies"].append({"type": "risk_violations", "count": state["risk_violations"]})
+    if state.get("open_position") is True and state.get("position_side") not in ("BUY", "SELL"):
+        report["anomalies"].append({"type": "invalid_position_side"})
     candle_at = state.get("last_candle_at")
     if candle_at:
         candle_age = valid_age(now, candle_at, report, "last_candle")
