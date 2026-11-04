@@ -35,10 +35,10 @@ function Invoke-Wrangler {
 function Set-AlertMode {
   param([ValidateSet("observe","active")][string]$Mode)
   $txt = Get-Content -LiteralPath $Config -Encoding UTF8 -Raw
-  if ($txt -notmatch '(?m)^ALERT_MODE\s*=\s*"(observe|active)"\s*$') {
+  if ($txt -notmatch '(?m)^ALERT_MODE[ \t]*=[ \t]*"(observe|active)"[ \t]*$') {
     throw "ALERT_MODE ausente/invalido no arquivo TOML. Nao publicar."
   }
-  $txt = [regex]::Replace($txt, '(?m)^ALERT_MODE\s*=\s*"(observe|active)"\s*$',
+  $txt = [regex]::Replace($txt, '(?m)^ALERT_MODE[ \t]*=[ \t]*"(observe|active)"[ \t]*$',
     ('ALERT_MODE = "'+$Mode+'"'))
   [System.IO.File]::WriteAllText($Config,$txt,(New-Object System.Text.UTF8Encoding($false)))
 }
