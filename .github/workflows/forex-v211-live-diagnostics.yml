@@ -1,0 +1,43 @@
+name: Forex V2.1.1 Read-only Live Diagnostic
+on:
+  push:
+    branches:
+      - fix/v211-scheduler-reliability-diagnostics
+    paths:
+      - 'experimentos/forex_v211_schedule_diagnostics.py'
+      - '.github/workflows/forex-v211-live-diagnostics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-live-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Query actual scheduled workflow history and public PAPER state
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python experimentos/forex_v211_schedule_diagnostics.py > /tmp/forex-v211-live-diagnostic.json
+          python - <<'PY'
+          import json
+          with open('/tmp/forex-v211-live-diagnostic.json', encoding='utf-8') as f:
+              r=json.load(f)
+          print(json.dumps({
+              'checked_at_utc':r.get('checked_at_utc'),
+              'scheduled_runs':r.get('scheduled_runs'),
+              'last_run_age_minutes':r.get('last_run_age_minutes'),
+              'last_success_age_minutes':r.get('last_success_age_minutes'),
+              'state_age_minutes':r.get('state_age_minutes'),
+              'anomaly_types':sorted({x['type'] for x in r['anomalies']}),
+              'anomaly_count':len(r['anomalies']),
+              'diagnostic_note':r.get('diagnostic_note'),
+          },indent=2))
+          PY
