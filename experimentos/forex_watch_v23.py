@@ -131,6 +131,16 @@ def assess(state, runs, now):
             flag("ATENCAO", "SCHEDULE_DELAY", "Intervalo desde último início ultrapassou 30 min.", age_min=last_run_age)
     checked = state.get("last_checked_at") or state.get("updated_at")
     check_age = age_min(checked, now) if checked else None
+    # A green workflow does not prove that the PAPER job persisted public state.
+    # Allow five minutes for GitHub metadata/commit propagation after completion.
+    if last and last.get("status") == "completed" and last.get("conclusion") == "success" and last.get("event") == "schedule" and checked:
+        completed_at = last.get("updated_at") or last["created_at"]
+        propagation_age = age_min(completed_at, now)
+        delta = (utc(checked) - utc(last["created_at"])).total_seconds() / 60
+        if propagation_age > 5 and delta < -2:
+            flag("CRITICO" if state.get("open_position") is True else "ATENCAO",
+                 "SUCCESS_WITHOUT_NEW_STATE",
+                 "GitHub reportou sucesso, mas não há avaliação PAPER posterior ao início da execução.")
     position = state.get("open_position") is True
     if check_age is None:
         flag("CRITICO", "MISSING_CHECK", "Estado sem horário de verificação.")
