@@ -448,5 +448,23 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         kinds = {a["type"] for a in diagnose([run(5)], st, NOW)["anomalies"]}
         self.assertIn("gap_halt_or_data_gap", kinds)
 
+
+    def test_recent_and_historical_run_counts(self):
+        result = diagnose([run(5), run(45), run(180)], state(5), NOW)
+        self.assertEqual(result["recent_scheduled_runs"], 2)
+        self.assertEqual(result["historical_scheduled_runs"], 1)
+
+    def test_queue_delay_metrics(self):
+        r = run(15)
+        r["run_started_at"] = (NOW - dt.timedelta(minutes=8)).isoformat()
+        result = diagnose([r], state(5), NOW)
+        self.assertEqual(result["queue_delays_minutes"], [7.0])
+        self.assertEqual(result["max_queue_delay_minutes"], 7.0)
+
+    def test_queue_delay_metric_absent_without_start_time(self):
+        result = diagnose([run(5)], state(5), NOW)
+        self.assertEqual(result["queue_delays_minutes"], [])
+        self.assertIsNone(result["max_queue_delay_minutes"])
+
 if __name__ == "__main__":
     unittest.main()
