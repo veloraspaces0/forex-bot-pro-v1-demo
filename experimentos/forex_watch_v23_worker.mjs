@@ -8,6 +8,10 @@ export const BOT_NAME = "Forex Bot Pro V2 - Paper EURUSD";
 const ENDPOINT = "https://api.github.com/repos/" + GITHUB_REPO;
 const FAILURE = new Set(["failure", "cancelled", "timed_out", "action_required", "startup_failure"]);
 const MAX_API_BYTES = 2_000_000;
+const FETCH_ATTEMPTS = 2;
+const FETCH_TIMEOUT_MS = 5000;
+const MONITOR_WORKFLOW = "forex-v2.yml";
+const RECOVERY_OBSERVATION_MINUTES = 10;
 const RETRY_CODES = new Set([429, 500, 502, 503, 504]);
 
 export function minutesAgo(when, now) {
@@ -100,50 +104,51 @@ export function assess(state, runs, now) {
     lastRunId:latest?.id || null, source:"PUBLIC_GITHUB_ONLY"};
 }
 async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setTimeout(resolve,ms))) {
-  let lastError;
-  for (let n=0;n<3;n++) {
+  for (let n=0; n<FETCH_ATTEMPTS; n++) {
+    const controller = new AbortController();
+    const timer = setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(()=>controller.abort(), 8000);
-      let response;
-      try {
-        response = await fetcher(url,{headers:{"Accept":"application/vnd.github+json",
-          "User-Agent":"Forex-Watch-V2.3","Cache-Control":"no-cache"},
-          cache:"no-store",signal:controller.signal});
-      } finally { clearTimeout(timeout); }
+      const response = await fetcher(url,{headers:{"Accept":"application/vnd.github+json",
+        "User-Agent":"Forex-Watch-V2.3","Cache-Control":"no-cache"},
+        cache:"no-store",signal:controller.signal});
       if (!response.ok) {
-        const error = new Error("GitHub API HTTP " + response.status);
-        if (!RETRY_CODES.has(response.status) || n === 2) throw error;
-        lastError = error;
+        const err = new Error("GitHub API HTTP "+response.status);
+        if (!RETRY_CODES.has(response.status) || n===FETCH_ATTEMPTS-1) throw err;
       } else {
-        const body = await response.text();
+        const body=await response.text();
         if (body.length>MAX_API_BYTES) throw new Error("GitHub response too large");
         return JSON.parse(body);
       }
-    } catch (error) {
-      lastError = error;
-      if (n === 2 || /HTTP (401|403|404)/.test(String(error.message))) throw error;
-    }
-    await pause(2 ** n * 1000);
+    } catch(error) {
+      if (n===FETCH_ATTEMPTS-1 || /HTTP (401|403|404)/.test(String(error.message))) throw error;
+    } finally { clearTimeout(timer); }
+    await pause(1000);
   }
-  throw lastError || new Error("GitHub API unavailable");
+  throw new Error("GitHub API unavailable");
 }
 export async function readPublic(now=Date.now(), fetcher=fetch) {
   const [raw, data] = await Promise.all([
     getJson(ENDPOINT+"/contents/v2/state.json?ref=main",fetcher),
-    getJson(ENDPOINT+"/actions/runs?branch=main&per_page=100",fetcher),
+    getJson(ENDPOINT+"/actions/workflows/"+MONITOR_WORKFLOW+"/runs?branch=main&per_page=100",fetcher),
   ]);
   if (raw.encoding !== "base64" || typeof raw.content !== "string")
     throw new Error("GitHub state file format invalid");
-  const binary = atob(raw.content.replace(/\s/g,""));
-  const decoded = new Uint8Array(binary.length);
-  for (let i=0;i<binary.length;i++) decoded[i]=binary.charCodeAt(i);
-  const state = JSON.parse(new TextDecoder().decode(decoded));
+  let state;
+  try {
+    const binary = atob(raw.content.replace(/\s/g,""));
+    const decoded = new Uint8Array(binary.length);
+    for (let i=0;i<binary.length;i++) decoded[i]=binary.charCodeAt(i);
+    state = JSON.parse(new TextDecoder().decode(decoded));
+  } catch(error) {
+    throw new Error("STATE_BASE64_OR_JSON_INVALID");
+  }
   if (!Array.isArray(data.workflow_runs)) throw new Error("Missing GitHub workflow_runs");
   return assess(state,data.workflow_runs,now);
 }
 function incidentFingerprint(report) {
-  return report.status + "|" + (report.issues||[]).map(x=>x.code).sort().join(",");
+  const codes=(report.issues||[]).map(x=>x.code).sort();
+  const runSpecific=codes.some(x=>["RUN_FAILED","RUN_STUCK","QUEUE_STUCK"].includes(x));
+  return report.status+"|"+codes.join(",")+(runSpecific && report.lastRunId?"|run:"+report.lastRunId:"");
 }
 function alertText(report) {
   const url = "https://github.com/" + GITHUB_REPO + "/actions";
@@ -155,44 +160,95 @@ function alertText(report) {
     "Saldo virtual: "+String(report.balance??"não disponível"),
     "Estado verificado: "+String(report.checkedAt??"não disponível"),url].join("\n").slice(0,3600);
 }
-async function sendTelegram(env, message, fetcher=fetch) {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return false;
-  const url = "https://api.telegram.org/bot"+env.TELEGRAM_BOT_TOKEN+"/sendMessage";
-  const response = await fetcher(url,{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({chat_id:env.TELEGRAM_CHAT_ID,text:message,disable_web_page_preview:true})});
-  if (!response.ok) throw new Error("Notification failed; HTTP "+response.status);
-  return true;
+async function sendTelegram(env,message,fetcher=fetch) {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID)
+    throw new Error("ALERT_CHANNEL_NOT_CONFIGURED");
+  const url="https://api.telegram.org/bot"+env.TELEGRAM_BOT_TOKEN+"/sendMessage";
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
+  try {
+    const response=await fetcher(url,{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({chat_id:env.TELEGRAM_CHAT_ID,text:message,disable_web_page_preview:true}),
+      signal:controller.signal});
+    if (!response.ok) throw new Error("TELEGRAM_HTTP_"+response.status);
+    let data;
+    try { data=await response.json(); } catch(error) { throw new Error("TELEGRAM_INVALID_RESPONSE"); }
+    if (!data || data.ok!==true) throw new Error("TELEGRAM_REJECTED");
+    return true;
+  } finally { clearTimeout(timer); }
 }
-export async function deliver(report, env, now=Date.now(), fetcher=fetch) {
-  // No KV -> only logs, NEVER spam Telegram on every cron tick.
-  if (!env.INCIDENT_KV || !env.TELEGRAM_CHAT_ID || !env.TELEGRAM_BOT_TOKEN)
-    return {notified:false,reason:"KV and Telegram not configured; log only"};
-  const key = "forex-watch-v23-incident";
-  const oldRaw = await env.INCIDENT_KV.get(key);
-  const previous = oldRaw ? JSON.parse(oldRaw) : null;
-  if (report.status === "OK") {
-    if (!previous) return {notified:false,reason:"healthy"};
-    await sendTelegram(env,"Forex Watch V2.3 — RECUPERADO\nMonitor sem novas anomalias.",fetcher);
-    await env.INCIDENT_KV.delete(key);
+export async function deliver(report,env,now=Date.now(),fetcher=fetch) {
+  // An opt-in release gate. A worker in observe mode only logs diagnostics.
+  if (env.ALERT_MODE!=="active") return {notified:false,reason:"observe_only"};
+  const missing=["INCIDENT_KV","TELEGRAM_BOT_TOKEN","TELEGRAM_CHAT_ID"]
+    .filter(key=>!env[key]);
+  if(missing.length) throw new Error("ALERT_CHANNEL_NOT_CONFIGURED:"+missing.join(","));
+  const key="forex-watch-v23-incident";
+  let previous=null,kvReadable=true;
+  try {
+    const oldRaw=await env.INCIDENT_KV.get(key);
+    previous=oldRaw?JSON.parse(oldRaw):null;
+  } catch(error) {
+    kvReadable=false;
+    console.error("INCIDENT_STORE_READ_ERROR");
+  }
+  if(report.status==="OK") {
+    // Never say recovered when prior incident state cannot be read.
+    if(!kvReadable) return {notified:false,reason:"kv_unavailable_recovery_blocked"};
+    if(!previous) return {notified:false,reason:"healthy"};
+    // Require two distinct healthy observations, with a fresh public state.
+    if(!report.checkedAt) return {notified:false,reason:"healthy_observation_missing"};
+    const first=previous.healthySince||0;
+    const distinct=now-first>=RECOVERY_OBSERVATION_MINUTES*60*1000 &&
+      previous.healthyCheckAt!==report.checkedAt;
+    if(!first || !distinct) {
+      // Do not restart the clock on identical observations; keep the original.
+      if(!first) {
+        try {
+          await env.INCIDENT_KV.put(key,JSON.stringify({...previous,
+            healthySince:now,healthyCheckAt:report.checkedAt}),{expirationTtl:172800});
+        } catch(error) {
+          console.error("INCIDENT_STORE_WRITE_ERROR");
+          return {notified:false,reason:"kv_unavailable_recovery_blocked"};
+        }
+      }
+      return {notified:false,reason:"recovery_pending_second_check"};
+    }
+    await sendTelegram(env,"Forex Watch V2.3 — RECUPERADO\nDuas verificações saudáveis distintas.",fetcher);
+    try { await env.INCIDENT_KV.delete(key); }
+    catch(error) { console.error("INCIDENT_STORE_DELETE_ERROR"); }
     return {notified:true,recovery:true};
   }
   const fingerprint=incidentFingerprint(report);
-  const escalation = previous && previous.status !== "CRITICO" && report.status === "CRITICO";
-  const repeat = previous && now - previous.notifiedAt > 4*60*60*1000;
-  const isNew = !previous || previous.fingerprint !== fingerprint;
-  if (!isNew && !escalation && !repeat) return {notified:false,reason:"deduplicated"};
+  const repeat=previous && now-previous.notifiedAt>4*60*60*1000;
+  const isNew=!previous || previous.fingerprint!==fingerprint;
+  if(kvReadable && !isNew && !repeat) {
+    if(previous.healthySince) {
+      // Incident reappeared during recovery; reset its recovery confirmation.
+      try { await env.INCIDENT_KV.put(key,JSON.stringify({...previous,
+        healthySince:0,healthyCheckAt:null}),{expirationTtl:172800}); }
+      catch(error) { console.error("INCIDENT_STORE_WRITE_ERROR"); }
+    }
+    return {notified:false,reason:"deduplicated"};
+  }
+  // Alert FIRST; never persist "notified" if Telegram did not accept it.
   await sendTelegram(env,alertText(report),fetcher);
-  await env.INCIDENT_KV.put(key,JSON.stringify({fingerprint,status:report.status,notifiedAt:now}),
-    {expirationTtl:172800});
-  return {notified:true,recovery:false};
+  try {
+    await env.INCIDENT_KV.put(key,JSON.stringify({
+      fingerprint,status:report.status,notifiedAt:now,
+      healthySince:0,healthyCheckAt:null}),{expirationTtl:172800});
+  } catch(error) { console.error("INCIDENT_STORE_WRITE_ERROR"); }
+  return {notified:true,recovery:false,storeDegraded:!kvReadable};
 }
 export async function runCheck(env, now=Date.now(), fetcher=fetch) {
   let report;
   try {
     report=await readPublic(now,fetcher);
   } catch(error) {
+    const code=String(error.message).includes("STATE_BASE64_OR_JSON_INVALID")?
+      "STATE_BASE64_OR_JSON_INVALID":"MONITOR_UNAVAILABLE";
     report={status:"INDETERMINADO",issues:[{
-      code:"MONITOR_UNAVAILABLE",severity:"INDETERMINADO",
+      code,severity:"INDETERMINADO",
       message:"API GitHub indisponível ou resposta inválida; NÃO inferir falha do bot."}],
       checkedAt:null,openPosition:null,balance:null};
   }
