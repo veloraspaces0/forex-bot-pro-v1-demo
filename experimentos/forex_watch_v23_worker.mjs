@@ -8,8 +8,8 @@ export const BOT_NAME = "Forex Bot Pro V2 - Paper EURUSD";
 const ENDPOINT = "https://api.github.com/repos/" + GITHUB_REPO;
 const FAILURE = new Set(["failure", "cancelled", "timed_out", "action_required", "startup_failure"]);
 const MAX_API_BYTES = 2_000_000;
-const FETCH_ATTEMPTS = 2;
-const FETCH_TIMEOUT_MS = 5000;
+const FETCH_ATTEMPTS = 3;
+const FETCH_TIMEOUT_MS = 10000;
 const MONITOR_WORKFLOW = "forex-v2.yml";
 const RECOVERY_OBSERVATION_MINUTES = 10;
 const RETRY_CODES = new Set([429, 500, 502, 503, 504]);
@@ -191,47 +191,69 @@ export function assess(state, runs, now) {
 }
 async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setTimeout(resolve,ms)), token=null) {
   const resource=url.includes("/contents/")?"STATE":"RUNS";
-  for (let n=0; n<FETCH_ATTEMPTS; n++) {
-    const controller = new AbortController();
-    const timer = setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
+  for(let n=0;n<FETCH_ATTEMPTS;n++){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
+    let retryDelay=1000*Math.pow(2,n);
     try {
       const headers={"Accept":"application/vnd.github+json",
         "User-Agent":"Forex-Watch-V2.3.2","Cache-Control":"no-cache"};
-      // Optional read-only repository credential, configured as Cloudflare secret.
       if(token) headers.Authorization="Bearer "+token;
-      const response = await fetcher(url,{headers,cache:"no-store",signal:controller.signal});
-      if (!response.ok) {
-        // Diagnose 403 without logging credentials, response bodies, or GitHub headers.
-        const remaining=response.headers?.get?.("x-ratelimit-remaining");
-        const retryAfter=response.headers?.get?.("retry-after");
-        const rateLimited=response.status===403 &&
-          (remaining==="0" || (retryAfter!==null && retryAfter!==undefined));
-        const code="GITHUB_"+resource+"_HTTP_"+response.status+
-          (rateLimited?"_RATE_LIMIT":"");
-        const err = new Error(code);
-        if (!RETRY_CODES.has(response.status) || n===FETCH_ATTEMPTS-1) throw err;
-      } else {
+      const response=await fetcher(url,{headers,cache:"no-store",signal:controller.signal});
+      if(response.ok){
         const body=await response.text();
-        if (body.length>MAX_API_BYTES) throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
-        try { return JSON.parse(body); }
-        catch(error) { throw new Error("GITHUB_"+resource+"_INVALID_JSON"); }
+        if(body.length>MAX_API_BYTES) throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
+        try{return JSON.parse(body);}
+        catch {throw new Error("GITHUB_"+resource+"_INVALID_JSON");}
       }
-    } catch(error) {
-      const message=String(error?.message||"");
+      const remaining=response.headers?.get?.("x-ratelimit-remaining");
+      const retryAfter=response.headers?.get?.("retry-after");
+      const reset=response.headers?.get?.("x-ratelimit-reset");
+      // Read at most 2048 bytes for classification. Never log or forward the body.
+      let hint="";
+      if(response.status===403){
+        try {hint=(await response.text()).slice(0,2048).toLowerCase();} catch {}
+      }
+      const secondary=/secondary rate limit|abuse detection|secondary-rate-limit/.test(hint);
+      const limited=(response.status===403 || response.status===429) &&
+        (remaining==="0" || retryAfter!==null && retryAfter!==undefined || secondary || response.status===429);
+      const code="GITHUB_"+resource+"_HTTP_"+response.status+
+        (limited?"_RATE_LIMIT":token && response.status===403?"_POSSIBLE_PERMISSION":"");
+      if(!limited && !RETRY_CODES.has(response.status)) throw new Error(code);
+      if(n===FETCH_ATTEMPTS-1) throw new Error(code);
+      // Respect GitHub Retry-After and reset; never retry early if wait exceeds
+      // our bounded 10-second budget. The next cron cycle can try again.
+      if(retryAfter!==null && retryAfter!==undefined){
+        const seconds=Number(retryAfter);
+        const date=Date.parse(retryAfter);
+        const wait=Number.isFinite(seconds)?seconds*1000:Number.isFinite(date)?date-Date.now():NaN;
+        if(!Number.isFinite(wait) || wait>10000) throw new Error(code);
+        retryDelay=Math.max(retryDelay,Math.max(0,wait));
+      } else if(remaining==="0" && reset!==null && reset!==undefined){
+        const wait=Number(reset)*1000-Date.now();
+        if(!Number.isFinite(wait) || wait>10000) throw new Error(code);
+        retryDelay=Math.max(retryDelay,Math.max(0,wait));
+      }
+      await pause(retryDelay);
+    } catch(error){
+      const msg=String(error?.message||"");
       const code=error?.name==="AbortError"?"GITHUB_"+resource+"_TIMEOUT":
-        /^GITHUB_/.test(message)?message:"GITHUB_"+resource+"_NETWORK_ERROR";
+        /^GITHUB_/.test(msg)?msg:"GITHUB_"+resource+"_NETWORK_ERROR";
       if(n===FETCH_ATTEMPTS-1 || /HTTP_(401|403|404)|INVALID_JSON|RESPONSE_TOO_LARGE/.test(code))
         throw new Error(code);
-    } finally { clearTimeout(timer); }
-    await pause(1000);
+      await pause(retryDelay);
+    } finally {clearTimeout(timer);}
   }
   throw new Error("GITHUB_"+resource+"_NETWORK_ERROR");
 }
 export async function readPublic(now=Date.now(), fetcher=fetch, token=null) {
-  const [raw, data] = await Promise.all([
+  const results = await Promise.allSettled([
     getJson(ENDPOINT+"/contents/v2/state.json?ref=main",fetcher,undefined,token),
     getJson(ENDPOINT+"/actions/workflows/"+MONITOR_WORKFLOW+"/runs?branch=main&per_page=20",fetcher,undefined,token),
   ]);
+  const failed=results.find(x=>x.status==="rejected");
+  if(failed) throw failed.reason;
+  const [raw,data]=results.map(x=>x.value);
   if (raw.encoding !== "base64" || typeof raw.content !== "string")
     throw new Error("GitHub state file format invalid");
   let state;
@@ -435,7 +457,7 @@ export async function runCheck(env, now=Date.now(), fetcher=fetch) {
     await assessContinuity(report,env,now);
   } catch(error) {
     const rawCode=String(error?.message||"");
-    const code=/^(GITHUB_(STATE|RUNS)_(HTTP_[0-9]{3}(?:_RATE_LIMIT)?|RESPONSE_TOO_LARGE|INVALID_JSON|TIMEOUT|NETWORK_ERROR)|STATE_BASE64_OR_JSON_INVALID)$/.test(rawCode)
+    const code=/^(GITHUB_(STATE|RUNS)_(HTTP_[0-9]{3}(?:_RATE_LIMIT|_POSSIBLE_PERMISSION)?|RESPONSE_TOO_LARGE|INVALID_JSON|TIMEOUT|NETWORK_ERROR)|STATE_BASE64_OR_JSON_INVALID)$/.test(rawCode)
       ? rawCode:rawCode==="GitHub state file format invalid"?"STATE_FILE_FORMAT_INVALID":
         rawCode==="Missing GitHub workflow_runs"?"GITHUB_RUNS_MALFORMED":"MONITOR_UNAVAILABLE";
     // Log only a controlled error code, never an HTTP body or credential.
