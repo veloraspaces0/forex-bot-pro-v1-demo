@@ -11,6 +11,7 @@ on:
       - fix/forex-watch-v231-github-diagnostics-20261104
       - fix/forex-watch-v232-github-403-diagnostics
       - fix/forex-watch-v233-resilience
+      - fix/forex-watch-v24-403-hardening-50cycles
     paths:
       - 'experimentos/forex_watch_v23.py'
       - 'experimentos/forex_watch_v23_worker.mjs'
@@ -29,7 +30,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -42,6 +43,12 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_forex_watch_v23.py' -v
       - name: Cloudflare Worker V2.3 offline tests
         run: node --test tests/test_forex_watch_v23_worker.mjs
+      - name: Repeat HTTP 403 adversarial regression 50 times (offline)
+        run: |
+          for i in $(seq 1 50); do
+            echo "HTTP 403 regression cycle $i/50"
+            node --test --test-name-pattern='HTTP 403 adversarial matrix' tests/test_forex_watch_v23_worker.mjs > /tmp/watch-403-cycle.log 2>&1 || { cat /tmp/watch-403-cycle.log; exit 1; }
+          done
       - name: Cloudflare Wrangler v4 bundle validation (DRY RUN — no deploy)
         run: npx --yes wrangler@4.157.0 deploy --dry-run --config experimentos/wrangler_v23.toml
       - name: Validate Windows PowerShell deployment helper syntax (never execute)
