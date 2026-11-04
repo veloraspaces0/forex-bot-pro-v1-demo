@@ -904,3 +904,21 @@ test("rate limit reset beyond retry budget never retries REST state",async()=>{
   assert.equal(out.report.status,"OK");
   assert.equal(stateCalls,1,"must not retry before GitHub rate-limit reset");
 });
+
+test("Retry-After above retry budget never retries REST state",async()=>{
+  let stateCalls=0;
+  const fake=async url=>{
+    if(String(url).includes("/contents/")){
+      stateCalls++;
+      return new Response("secondary limit",{status:403,headers:{
+        "retry-after":"3600"
+      }});
+    }
+    if(String(url).startsWith("https://raw.githubusercontent.com/"))
+      return new Response(JSON.stringify(state()),{status:200});
+    return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+  };
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"OK");
+  assert.equal(stateCalls,1,"Retry-After 3600s must not trigger another REST request");
+});
