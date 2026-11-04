@@ -559,3 +559,22 @@ test("active floating paper equity may fluctuate without closing or rewriting tr
   await assessContinuity(next,env,later);
   assert.ok(!codes(next).includes("HISTORY_REGRESSION_SUSPECTED"));
 });
+
+
+test("self-inconsistent public state must NEVER poison trusted continuity baseline",async()=>{
+  const store=memoryKV(),env=activeEnv(store),key="forex-watch-v23-public-history";
+  const initial=assess(state(),runs(),NOW);
+  await assessContinuity(initial,env,NOW);
+  const trusted=store.records.get(key);
+  const later=NOW+15*60000;
+  const corrupt=assess(state(4,20,false,later,{closed_trades:2}),
+    runs([4,19,34,49,64],later),later);
+  assert.ok(codes(corrupt).includes("PUBLIC_HISTORY_INCONSISTENT"));
+  await assessContinuity(corrupt,env,later);
+  assert.equal(store.records.get(key),trusted,"Must retain last internally consistent history");
+  const repairedAt=NOW+30*60000;
+  const repaired=assess(state(4,20,false,repairedAt),
+    runs([4,19,34,49,64],repairedAt),repairedAt);
+  await assessContinuity(repaired,env,repairedAt);
+  assert.ok(!codes(repaired).includes("HISTORY_REGRESSION_SUSPECTED"));
+});
