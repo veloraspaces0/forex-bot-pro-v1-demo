@@ -160,6 +160,7 @@ def diagnose(runs, state, now):
         if recent_cutoff <= parse_time(r["created_at"]) <= now + dt.timedelta(minutes=2)
     ]
     report["max_recent_dispatch_offset_minutes"] = max(report["recent_dispatch_offsets_minutes"], default=None)
+    report["recent_dispatch_sample_count"] = len(report["recent_dispatch_offsets_minutes"])
     for a, b in zip(scheduled, scheduled[1:]):
         gap = round((parse_time(a["created_at"]) - parse_time(b["created_at"])).total_seconds()/60, 2)
         report["intervals_minutes"].append(gap)
@@ -205,6 +206,8 @@ def diagnose(runs, state, now):
             target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
             report[target].append({"type": "workflow_failure", "run": r.get("html_url"),
                                    "conclusion": r["conclusion"]})
+    report["queue_delay_sample_count"] = len(report["queue_delays_minutes"])
+    report["queue_delay_missing_count"] = sum(1 for r in scheduled if not r.get("run_started_at"))
     report["max_queue_delay_minutes"] = max(report["queue_delays_minutes"], default=None)
     successful = [r for r in scheduled if parse_time(r["created_at"]) <= now + dt.timedelta(minutes=2)
                   and r.get("conclusion") == "success"
