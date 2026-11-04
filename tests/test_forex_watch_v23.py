@@ -67,8 +67,8 @@ class V23(unittest.TestCase):
         self.assertNotIn("SCHEDULE_MISSING", reasons(out))
 
     def test_queue_stuck_accurate_reason(self):
-        rr = runs()
-        rr[0].update(status="queued", conclusion=None, created_at=stamp(24))
+        rr = runs((24, 39, 54, 69, 84))
+        rr[0].update(status="queued", conclusion=None)
         out = watch.assess(state(), rr, NOW)
         self.assertIn("QUEUE_STUCK", reasons(out))
         self.assertNotIn("SCHEDULE_MISSING", reasons(out))
