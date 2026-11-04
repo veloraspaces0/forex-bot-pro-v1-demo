@@ -114,6 +114,11 @@ export function assess(state, runs, now) {
   }
   const checked = state.last_checked_at || state.updated_at;
   const stateAge = checked ? minutesAgo(checked, now) : null;
+  // updated_at can advance independently. It does not prove the PAPER
+  // evaluation timestamp exists, so the fallback must not hide its absence.
+  if (!state.last_checked_at)
+    flag("CRITICO","LAST_CHECK_MISSING",
+      "Timestamp de avaliação PAPER ausente; updated_at não comprova avaliação.");
   // An Actions run can report success even though its PAPER job did not
   // publish a new public state. Avoid false positives while the GitHub commit
   // is propagating: allow at least five minutes after completed run metadata.
@@ -171,8 +176,11 @@ export function assess(state, runs, now) {
     closedTrades:state.closed_trades, riskViolations:state.risk_violations,
     wins:state.wins, losses:state.losses,
     maxClosedDrawdownPct:state.max_closed_drawdown_pct,
-    lastClosedTradeKey:state.closed_results.length?
-      JSON.stringify(["at","side","pnl","reason"].map(k=>state.closed_results[0][k]??null)):null,
+    // A corrupted closed_results is a history inconsistency, not an
+    // unhandled exception converting a known anomaly into INDETERMINADO.
+    lastClosedTradeKey:closedResults.length && closedResults[0] &&
+      typeof closedResults[0]==="object" && !Array.isArray(closedResults[0])?
+      JSON.stringify(["at","side","pnl","reason"].map(k=>closedResults[0][k]??null)):null,
     checkedAt:checked, candleAt:state.last_candle_at,
     lastRunId:latest?.id || null, source:"PUBLIC_GITHUB_ONLY"};
 }
@@ -288,9 +296,15 @@ export async function deliver(report,env,now=Date.now(),fetcher=fetch) {
       return {notified:false,reason:"recovery_pending_second_check"};
     }
     await sendTelegram(env,"Forex Watch V2.3 — RECUPERADO\nDuas verificações saudáveis distintas.",fetcher);
+    let storeDegraded=false;
     try { await env.INCIDENT_KV.delete(key); }
-    catch(error) { console.error("INCIDENT_STORE_DELETE_ERROR"); }
-    return {notified:true,recovery:true};
+    catch(error) {
+      storeDegraded=true;
+      console.error("INCIDENT_STORE_DELETE_ERROR");
+    }
+    // The recovery notification was accepted, but failed KV cleanup can
+    // cause duplicate recovery notifications on the next cycle.
+    return {notified:true,recovery:true,storeDegraded};
   }
   const fingerprint=incidentFingerprint(report);
   const repeat=previous && now-previous.notifiedAt>4*60*60*1000;
