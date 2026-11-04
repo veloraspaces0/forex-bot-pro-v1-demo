@@ -386,3 +386,15 @@ test("a late Cron scheduledTime must use the actual invocation clock",async()=>{
     assert.equal(calls.length,2);
   } finally { globalThis.fetch=realFetch; }
 });
+
+test("UTC or explicit offset mandatory for dates from external APIs",()=>{
+  for(const malformed of ["2026-11-04T12:00:00","2026-11-04","not a time",null]) {
+    assert.throws(()=>minutesAgo(malformed,NOW));
+  }
+  assert.equal(minutesAgo("2026-11-04T13:50:00-02:00",NOW),10);
+});
+test("malformed middle GitHub workflow timestamp cannot quietly pass green",()=>{
+  const rr=runs();
+  rr[3].created_at="2026-11-04T15:10:00";
+  assert.throws(()=>assess(state(),rr,NOW),/Timestamp missing explicit timezone/);
+});
