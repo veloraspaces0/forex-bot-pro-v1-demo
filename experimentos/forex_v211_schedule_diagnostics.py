@@ -49,6 +49,8 @@ def fetch_workflow_runs(base, max_pages=5):
             if not isinstance(item, dict):
                 raise ValueError("Invalid workflow run entry")
             identifier = item.get("id")
+            if identifier is not None and (type(identifier) is not int or identifier <= 0):
+                raise ValueError("Invalid workflow run ID")
             if identifier is not None:
                 if identifier in seen_ids:
                     continue
