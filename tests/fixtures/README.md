@@ -1,0 +1,5 @@
+# Fixture sintética V2 (sem dados reais)
+
+`v2_legacy_synthetic_state.json` reproduz o esquema do `initial()` da V2 antiga, acrescido de um trade simulado fictício. **Não é estado de produção** e não contém dados originais de mercado ou credenciais. `v2_legacy_synthetic_state.enc.txt` foi produzido **independentemente do `runner.py` V2.1**, pela fórmula de cifragem da V2 congelada no commit `aaa71a728c4d1dee8c9aef0eb1c65ee2a85da271`: `FX2` + nonce de 12 bytes + AES-256-GCM(PBKDF2-HMAC-SHA256, salt `fxbot-v2-v1`, 180.000 iterações, AAD `forex-bot-pro-v2-paper-only`). A chave pública de teste é `V2_SYNTHETIC_TEST_KEY_DO_NOT_USE` e o nonce sintético é `000102030405060708090a0b` em hexadecimal. Nunca use esses valores para produção.
+
+A V2.1 precisa decifrar esse ciphertext com os campos V2 antigos, migrar `gap_halt`, e preservar saldo, trades e posição. Isso valida o **formato criptográfico e o esquema de teste**, não comprova a decifragem do `state.enc` de produção nem o acesso à chave operacional verdadeira.
