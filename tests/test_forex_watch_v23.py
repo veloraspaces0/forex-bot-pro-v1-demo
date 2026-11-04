@@ -196,5 +196,32 @@ class V23(unittest.TestCase):
         rr[0]["conclusion"]=None
         self.assertIn("RUN_UNKNOWN",reasons(watch.assess(state(),rr,NOW)))
 
+class V23Hardening(unittest.TestCase):
+    def test_schedule_missing_90_minutes_critical(self):
+        out=watch.assess(state(age=90,candle_age=90),runs(ages=(90,105,120)),NOW)
+        self.assertEqual(out["status"],"CRITICO")
+        self.assertIn("SCHEDULE_MISSING",reasons(out))
+
+    def test_workflow_specific_runs_endpoint(self):
+        self.assertIn("actions/workflows/forex-v2.yml/runs?",watch.RUNS_ENDPOINT)
+        self.assertNotEqual(watch.RUNS_ENDPOINT,"actions/runs?branch=main&per_page=100")
+
+    def test_http_429_retry_and_recovery(self):
+        count=[]
+        sleeps=[]
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self,*args): return False
+            def read(self,size): return b'{"workflow_runs":[]}'
+        def opener(request,timeout):
+            count.append(timeout)
+            if len(count)==1:
+                raise urllib.error.HTTPError(request.full_url,429,"Too Many Requests",None,None)
+            return Response()
+        out=watch.github_json(watch.RUNS_ENDPOINT,opener=opener,sleeper=sleeps.append)
+        self.assertEqual(out,{"workflow_runs":[]})
+        self.assertEqual(len(count),2)
+        self.assertEqual(sleeps,[1])
+
 if __name__ == "__main__":
     unittest.main()
