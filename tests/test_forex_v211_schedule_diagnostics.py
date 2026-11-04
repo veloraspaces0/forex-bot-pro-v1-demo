@@ -494,5 +494,62 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         result = diagnose([r], state(5), NOW)
         self.assertEqual(result["max_dispatch_offset_minutes"], 5.5)
 
+
+    def test_auth_not_forwarded_to_similar_host(self):
+        with patch.dict("os.environ", {"GITHUB_TOKEN": "test-token"}), patch(
+            "experimentos.forex_v211_schedule_diagnostics.urllib.request.urlopen",
+            return_value=io.BytesIO(b'{}')) as opened:
+            fetch_json("https://api.github.com.evil.test/repos/veloraspaces0/forex-bot-pro-v1-demo/x")
+        self.assertIsNone(opened.call_args.args[0].get_header("Authorization"))
+
+    def test_auth_not_forwarded_to_userinfo_host(self):
+        with patch.dict("os.environ", {"GITHUB_TOKEN": "test-token"}), patch(
+            "experimentos.forex_v211_schedule_diagnostics.urllib.request.urlopen",
+            return_value=io.BytesIO(b'{}')) as opened:
+            fetch_json("https://api.github.com@evil.test/repos/veloraspaces0/forex-bot-pro-v1-demo/x")
+        self.assertIsNone(opened.call_args.args[0].get_header("Authorization"))
+
+    def test_null_http_error_headers_fail_closed(self):
+        err = urllib.error.HTTPError("https://api.github.com/x", 403, "forbidden", None, None)
+        with patch("experimentos.forex_v211_schedule_diagnostics.urllib.request.urlopen",
+                   side_effect=err) as opened:
+            with self.assertRaises(urllib.error.HTTPError):
+                fetch_json("https://api.github.com/x")
+        self.assertEqual(opened.call_count, 1)
+
+    def test_zero_total_with_nonempty_page_is_anomaly(self):
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json",
+                   return_value={"total_count": 0, "workflow_runs": [run(5)]}):
+            result = fetch_workflow_runs("https://api.github.com/repos/example/repo")
+        self.assertIn("nonempty_page_with_zero_total", result["pagination_anomalies"])
+
+    def test_empty_page_not_duplicate_page(self):
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json",
+                   return_value={"total_count": 1, "workflow_runs": []}):
+            result = fetch_workflow_runs("https://api.github.com/repos/example/repo")
+        self.assertNotIn("duplicate_page", result["pagination_anomalies"])
+
+    def test_naive_now_rejected_with_clear_error(self):
+        with self.assertRaisesRegex(ValueError, "timezone-aware"):
+            diagnose([run(5)], state(5), dt.datetime(2026, 11, 4, 21, 20))
+
+    def test_future_created_run_flagged(self):
+        result = diagnose([run(-15)], state(5), NOW)
+        self.assertIn("future_run_created_at", {a["type"] for a in result["anomalies"]})
+
+    def test_old_inconsistent_status_is_historical(self):
+        result = diagnose([run(5), dict(run(180), status="queued")], state(5), NOW)
+        self.assertNotIn("inconsistent_run_status", {a["type"] for a in result["anomalies"]})
+        self.assertIn("inconsistent_run_status", {a["type"] for a in result["historical_anomalies"]})
+
+    def test_old_missing_conclusion_is_historical(self):
+        result = diagnose([run(5), dict(run(180), status="completed", conclusion=None)], state(5), NOW)
+        self.assertNotIn("missing_run_conclusion", {a["type"] for a in result["anomalies"]})
+        self.assertIn("missing_run_conclusion", {a["type"] for a in result["historical_anomalies"]})
+
+    def test_future_success_does_not_mask_missing_success(self):
+        result = diagnose([run(-15)], state(5), NOW)
+        self.assertIn("no_successful_scheduled_runs", {a["type"] for a in result["anomalies"]})
+
 if __name__ == "__main__":
     unittest.main()
