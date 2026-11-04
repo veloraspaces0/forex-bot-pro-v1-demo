@@ -151,9 +151,8 @@ def diagnose(runs, state, now):
     if state.get("risk_violations") is None:
         report["anomalies"].append({"type": "missing_risk_violations"})
     if state.get("risk_violations") is not None and (
-        type(state["risk_violations"]) not in (int, float)
+        type(state["risk_violations"]) is not int
         or state["risk_violations"] < 0
-        or state["risk_violations"] != state["risk_violations"]
     ):
         report["anomalies"].append({"type": "invalid_risk_violations"})
     if type(state.get("risk_violations")) in (int, float) and state["risk_violations"] > 0:
