@@ -169,6 +169,8 @@ def diagnose(runs, state, now):
     else:
         report["anomalies"].append({"type": "missing_last_candle_timestamp"})
     updated = state.get("last_checked_at") or state.get("updated_at")
+    if candle_at and updated and parse_time(candle_at) > parse_time(updated) + dt.timedelta(minutes=2):
+        report["anomalies"].append({"type": "candle_ahead_of_state"})
     if updated:
         age = valid_age(now, updated, report, "state")
         report["state_age_minutes"] = age
