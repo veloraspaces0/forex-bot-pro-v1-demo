@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only Forex V2.1 schedule diagnostic. No secrets, no writes."""
+"""Read-only Forex V2.1 schedule diagnostic. No orders, no state writes."""
 import argparse
 import datetime as dt
 import json
