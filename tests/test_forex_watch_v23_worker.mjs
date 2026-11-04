@@ -867,3 +867,21 @@ test("chunked oversized GitHub JSON without content-length is bounded",async()=>
   assert.equal(cancelled,true);
   assert.ok(reads<=3,"stream must stop before unbounded reads");
 });
+
+test("raw fallback rejects oversized streamed JSON without Content-Length",async()=>{
+  let rawCancelled=false,rawReads=0;
+  const fake=async url=>{
+    const u=String(url);
+    if(u.includes("/contents/"))return new Response("forbidden",{status:403});
+    if(u.includes("/actions/"))return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+    return {ok:true,status:200,headers:{get:()=>null},body:{getReader:()=>({
+      read:async()=>{rawReads++;return {done:false,value:new Uint8Array(700000)};},
+      cancel:async()=>{rawCancelled=true;}
+    })}};
+  };
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_RESPONSE_TOO_LARGE"));
+  assert.equal(rawCancelled,true);
+  assert.ok(rawReads<=3);
+});
