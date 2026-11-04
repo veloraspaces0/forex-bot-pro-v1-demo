@@ -150,7 +150,7 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         self.assertIn("no_successful_scheduled_runs", {a["type"] for a in result["anomalies"]})
 
     def test_duplicate_pages_deduplicated(self):
-        page = {"total_count": 150, "workflow_runs": [dict(run(i), id=i) for i in range(100)]}
+        page = {"total_count": 150, "workflow_runs": [dict(run(i), id=i + 1) for i in range(100)]}
         with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json", return_value=page):
             result = fetch_workflow_runs("https://api.github.com/repos/example/repo", max_pages=2)
         self.assertEqual(len(result["workflow_runs"]), 100)
@@ -182,7 +182,7 @@ class ScheduleDiagnosticTests(unittest.TestCase):
 
     def test_pagination_empty_second_page_detected(self):
         pages = [
-            {"total_count": 150, "workflow_runs": [dict(run(i), id=i) for i in range(100)]},
+            {"total_count": 150, "workflow_runs": [dict(run(i), id=i + 1) for i in range(100)]},
             {"total_count": 150, "workflow_runs": []},
         ]
         with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json", side_effect=pages):
@@ -192,8 +192,8 @@ class ScheduleDiagnosticTests(unittest.TestCase):
 
     def test_pagination_total_count_changed_detected(self):
         pages = [
-            {"total_count": 150, "workflow_runs": [dict(run(i), id=i) for i in range(100)]},
-            {"total_count": 160, "workflow_runs": [dict(run(i), id=i) for i in range(100, 160)]},
+            {"total_count": 150, "workflow_runs": [dict(run(i), id=i + 1) for i in range(100)]},
+            {"total_count": 160, "workflow_runs": [dict(run(i), id=i + 1) for i in range(100, 160)]},
         ]
         with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json", side_effect=pages):
             result = fetch_workflow_runs("https://api.github.com/repos/example/repo")
