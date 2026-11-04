@@ -3,6 +3,7 @@
 import argparse
 import datetime as dt
 import json
+import os
 import sys
 import urllib.request
 import urllib.error
@@ -20,10 +21,13 @@ def forex_market_open(now):
     return weekday < 4 or (weekday == 4 and local.hour < 17) or (weekday == 6 and local.hour >= 17)
 
 def fetch_json(url):
-    request = urllib.request.Request(url, headers={
+    headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "forex-v211-readonly-diagnostics",
-    })
+    }
+    if url.startswith(f"https://api.github.com/repos/{REPO}/") and os.getenv("GITHUB_TOKEN"):
+        headers["Authorization"] = "Bearer " + os.environ["GITHUB_TOKEN"]
+    request = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(request, timeout=15) as response:
         return json.load(response)
 
