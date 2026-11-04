@@ -34,7 +34,7 @@ footer{font-size:12px;color:#a1b0c8;line-height:1.7;margin:19px 0}
 @media(max-width:330px){.cards{grid-template-columns:1fr}}
 </style></head><body><main>
 <header>
-<div><h1>Forex Bot Pro <span style="color:#98b6ff">V2</span></h1>
+<div><h1>Forex Bot Pro <span style="color:#98b6ff">V2.1</span></h1>
 <div class="muted sub">EUR/USD · 15 minutos · Dados de mercado · Operações simuladas</div></div>
 <div style="display:flex;align-items:center;gap:9px"><span class="status" id="status">AGUARDANDO</span><button class="button" id="refresh" type="button">Atualizar</button></div>
 </header>
@@ -49,12 +49,14 @@ footer{font-size:12px;color:#a1b0c8;line-height:1.7;margin:19px 0}
 <section class="panel"><h2>Evolução do saldo simulado</h2><canvas id="curve" aria-label="Gráfico de saldo realizado"></canvas><p id="curveInfo" class="muted sub">Aguardando operações encerradas para desenhar a curva de resultados.</p></section>
 <aside class="panel"><h2>Proteção do capital</h2>
  <div class="kv"><span>Capital inicial</span><b>US$ 100</b></div>
- <div class="kv"><span>Risco nominal por entrada</span><b>0,5%</b></div>
+ <div class="kv"><span>Risco planejado por entrada</span><b>0,5% (não garantido)</b></div>
  <div class="kv"><span>Bloqueio diário</span><b>2%</b></div>
  <div class="kv"><span>Alavancagem simulada</span><b>Até 20x</b></div>
  <div class="kv"><span>Spread hipotético</span><b>1,2 pip</b></div>
  <div class="kv"><span>Posição aberta</span><b id="position">Não</b></div>
  <div class="kv"><span>Drawdown realizado máx.</span><b id="dd">0%</b></div>
+ <div class="kv"><span>Perdas acima do risco planejado</span><b id="riskViolations">0</b></div>
+ <div class="kv"><span>Bloqueio por lacuna de dados</span><b id="gapHalt">Não</b></div>
  <div class="kv"><span>Última vela fechada (UTC)</span><b id="candle">—</b></div>
  <div class="kv"><span>Última execução (UTC)</span><b id="updated">—</b></div>
 </aside></div>
@@ -109,6 +111,10 @@ function render(data){
  el('winrate').textContent=(data.closed_trades||0)+' / '+(data.win_rate_pct||0).toLocaleString('pt-BR')+'%';
  el('position').textContent=data.open_position?(data.position_side||'Sim'):'Não';
  el('dd').textContent=Number(data.max_closed_drawdown_pct||0).toLocaleString('pt-BR')+'%';
+ el('riskViolations').textContent=String(data.risk_violations||0);
+ el('riskViolations').className=Number(data.risk_violations||0)>0?'neg':'';
+ el('gapHalt').textContent=data.gap_halt?'SIM · REVISÃO NECESSÁRIA':'Não';
+ el('gapHalt').className=data.gap_halt?'neg':'';
  el('candle').textContent=dateTxt(data.last_candle_at);
  el('updated').textContent=dateTxt(data.last_checked_at);
  curve=data.equity_curve||[];draw();
