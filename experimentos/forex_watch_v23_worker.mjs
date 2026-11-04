@@ -56,6 +56,25 @@ export function assess(state, runs, now) {
   }
   const issues = [];
   const flag = (severity, code, message) => issues.push({ severity, code, message });
+  // Historical public dashboard self-consistency. This never reads trades
+  // from the encrypted state, nor attempts to reconstruct >20 closed results.
+  const lastPoint=Array.isArray(state.equity_curve)
+    ? state.equity_curve[state.equity_curve.length-1] : null;
+  const historyCoherent =
+    Number.isInteger(state.wins) && state.wins>=0 &&
+    Number.isInteger(state.losses) && state.losses>=0 &&
+    state.wins+state.losses===state.closed_trades &&
+    Array.isArray(state.closed_results) &&
+    state.closed_results.length===Math.min(20,state.closed_trades) &&
+    Number.isFinite(state.initial_balance) &&
+    Number.isFinite(state.pnl_total) &&
+    lastPoint && lastPoint.n===state.closed_trades &&
+    Number.isFinite(lastPoint.balance) &&
+    Math.abs(lastPoint.balance-state.balance)<0.021 &&
+    Math.abs(state.initial_balance+state.pnl_total-state.estimated_equity)<0.021;
+  if(!historyCoherent)
+    flag("CRITICO","PUBLIC_HISTORY_INCONSISTENT",
+      "Resumo público diverge em trades, resultado, saldo ou curva de capital.");
   const matching = runs.filter(r => r && r.name === BOT_NAME && r.head_branch === "main");
   // A malformed run can otherwise make cadence comparisons silently NaN.
   for(const r of matching) parseTimestamp(r.created_at);
