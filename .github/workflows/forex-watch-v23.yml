@@ -9,6 +9,7 @@ on:
       - revisao-final-forex-watch-v23-20261104
       - auditoria-adversarial-watch-v23-20261104
       - fix/forex-watch-v231-github-diagnostics-20261104
+      - fix/forex-watch-v232-github-403-diagnostics
     paths:
       - 'experimentos/forex_watch_v23.py'
       - 'experimentos/forex_watch_v23_worker.mjs'
