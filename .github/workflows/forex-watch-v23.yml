@@ -50,7 +50,13 @@ jobs:
           for i in $(seq 1 50); do
             echo "HTTP 403 regression cycle $i/50"
             if node --test --test-name-pattern='HTTP 403 adversarial matrix|HTTP 403/429 fault injection|403 API rate limit exceeded body|oversized GitHub response|chunked oversized GitHub JSON|raw fallback rejects oversized|rate limit reset beyond retry budget|Retry-After above retry budget|50 distinct long reset windows' tests/test_forex_watch_v23_worker.mjs > audit-results/cycle-$i.log 2>&1; then
-              echo "PASS cycle $i/50" | tee -a audit-results/50-cycle-results.txt
+              passed=$(sed -n 's/^# pass \([0-9][0-9]*\)$/\1/p' audit-results/cycle-$i.log | tail -1)
+              if [ -z "$passed" ] || [ "$passed" -lt 9 ]; then
+                echo "FAIL cycle $i/50: only ${passed:-0} matching tests passed (minimum 9)" | tee -a audit-results/50-cycle-results.txt
+                cat audit-results/cycle-$i.log
+                exit 1
+              fi
+              echo "PASS cycle $i/50 ($passed tests)" | tee -a audit-results/50-cycle-results.txt
             else
               echo "FAIL cycle $i/50" | tee -a audit-results/50-cycle-results.txt
               cat audit-results/cycle-$i.log
