@@ -272,12 +272,15 @@ export async function signalHeartbeat(env,success,fetcher=fetch) {
   let parsed;
   try { parsed=new URL(secret); }
   catch { throw new Error("HEARTBEAT_URL_INVALID"); }
+  const parts=parsed.pathname.split("/").filter(Boolean);
+  const validUuid=parts.length===1 &&
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(parts[0]);
   if(parsed.protocol!=="https:" || parsed.hostname!=="hc-ping.com" ||
-     parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash ||
-     !/^\\/[0-9a-fA-F-]{36}\\/?$/.test(parsed.pathname)) {
+     parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash || !validUuid) {
     throw new Error("HEARTBEAT_URL_INVALID");
   }
-  const target=parsed.href.replace(/\\/$/,"")+(success?"":"/fail");
+  const base=parsed.href.endsWith("/")?parsed.href.slice(0,-1):parsed.href;
+  const target=base+(success?"":"/fail");
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
   try {
