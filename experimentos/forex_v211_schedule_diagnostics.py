@@ -136,6 +136,9 @@ def diagnose(runs, state, now):
     report = {"checked_at_utc": now.isoformat(), "scheduled_runs": len(scheduled),
               "intervals_minutes": [], "anomalies": [], "historical_anomalies": []}
     recent_cutoff = now - dt.timedelta(hours=2)
+    report["recent_scheduled_runs"] = sum(parse_time(r["created_at"]) >= recent_cutoff for r in scheduled)
+    report["historical_scheduled_runs"] = len(scheduled) - report["recent_scheduled_runs"]
+    report["queue_delays_minutes"] = []
     for a, b in zip(scheduled, scheduled[1:]):
         gap = round((parse_time(a["created_at"]) - parse_time(b["created_at"])).total_seconds()/60, 2)
         report["intervals_minutes"].append(gap)
@@ -151,6 +154,7 @@ def diagnose(runs, state, now):
             report[target].append({"type": "inconsistent_run_timestamps", "run": r.get("html_url")})
         if started is not None and started >= created:
             queue_delay = round((started - created).total_seconds() / 60, 2)
+            report["queue_delays_minutes"].append(queue_delay)
             if queue_delay > 10:
                 target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
                 report[target].append({"type": "runner_queue_delay",
@@ -168,6 +172,7 @@ def diagnose(runs, state, now):
             target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
             report[target].append({"type": "workflow_failure", "run": r.get("html_url"),
                                    "conclusion": r["conclusion"]})
+    report["max_queue_delay_minutes"] = max(report["queue_delays_minutes"], default=None)
     successful = [r for r in scheduled if r.get("conclusion") == "success"
                   and r.get("status", "completed") == "completed"]
     if scheduled and not successful:
