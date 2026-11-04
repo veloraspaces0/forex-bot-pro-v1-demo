@@ -397,5 +397,33 @@ class ScheduleDiagnosticTests(unittest.TestCase):
                 fetch_json("https://api.github.com/test")
         self.assertEqual(opened.call_count, 3)
 
+
+    def test_retry_attempt_bounds(self):
+        for n in (0, -1, 6, True, 1.5):
+            with self.subTest(n=n), self.assertRaises(ValueError):
+                fetch_json("https://api.github.com/test", attempts=n)
+
+    def test_retry_after_nan_is_ignored(self):
+        err = urllib.error.HTTPError("https://api.github.com/test", 429, "rate", {"Retry-After": "NaN"}, None)
+        with patch("experimentos.forex_v211_schedule_diagnostics.urllib.request.urlopen",
+                   side_effect=[err, io.BytesIO(b'{}')]), patch(
+                   "experimentos.forex_v211_schedule_diagnostics.time.sleep") as sleeping:
+            self.assertEqual(fetch_json("https://api.github.com/test"), {})
+        self.assertEqual(sleeping.call_args.args[0], 1)
+
+    def test_old_unfinished_run_is_historical(self):
+        r = dict(run(180), status="in_progress", conclusion=None)
+        result = diagnose([run(5), r], state(5), NOW)
+        self.assertNotIn("run_not_completed", {a["type"] for a in result["anomalies"]})
+        self.assertIn("run_not_completed", {a["type"] for a in result["historical_anomalies"]})
+
+    def test_boolean_risk_counter_not_treated_as_positive_count(self):
+        st = state(5)
+        st["risk_violations"] = True
+        result = diagnose([run(5)], st, NOW)
+        kinds = {a["type"] for a in result["anomalies"]}
+        self.assertIn("invalid_risk_violations", kinds)
+        self.assertNotIn("risk_violations", kinds)
+
 if __name__ == "__main__":
     unittest.main()
