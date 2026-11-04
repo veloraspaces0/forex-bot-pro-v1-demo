@@ -18,10 +18,10 @@
   "open_position": false,
   "position_side": null,
   "status": "monitoring",
-  "message": "4 candles novos processados; simulação.",
-  "updated_at": "2026-11-04T09:29:37Z",
-  "last_checked_at": "2026-11-04T09:29:37Z",
-  "last_candle_at": "2026-11-04T09:00:00Z",
+  "message": "5 candles novos processados; simulação.",
+  "updated_at": "2026-11-04T10:41:37Z",
+  "last_checked_at": "2026-11-04T10:41:37Z",
+  "last_candle_at": "2026-11-04T10:15:00Z",
   "equity_curve": [
     {
       "n": 0,
