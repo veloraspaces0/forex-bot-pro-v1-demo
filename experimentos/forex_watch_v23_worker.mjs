@@ -106,6 +106,18 @@ export function assess(state, runs, now) {
   }
   const checked = state.last_checked_at || state.updated_at;
   const stateAge = checked ? minutesAgo(checked, now) : null;
+  // An Actions run can report success even though its PAPER job did not
+  // publish a new public state. Avoid false positives while the GitHub commit
+  // is propagating: allow at least five minutes after completed run metadata.
+  if (latest && latest.status==="completed" && latest.conclusion==="success" &&
+      latest.event==="schedule" && checked) {
+    const completedAt=latest.updated_at || latest.created_at;
+    const propagationAge=minutesAgo(completedAt, now);
+    const afterRunStart=parseTimestamp(checked)-parseTimestamp(latest.created_at);
+    if (propagationAge>5 && afterRunStart < -2*60000)
+      flag(opened?"CRITICO":"ATENCAO","SUCCESS_WITHOUT_NEW_STATE",
+        "GitHub reportou sucesso, mas não há avaliação PAPER posterior ao início da execução.");
+  }
   if (stateAge === null) flag("CRITICO", "MISSING_CHECK", "Sem horário do estado.");
   else if (opened && stateAge > 35) flag("CRITICO", "POSITION_UNCHECKED", "Posição paper sem avaliação >35 min.");
   else if (stateAge > 75) flag("CRITICO", "STATE_STALE", "Estado sem atualização >75 min.");
