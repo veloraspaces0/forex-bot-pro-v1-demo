@@ -1,90 +1,123 @@
 <#
 .SYNOPSIS
-  Configura o Forex Watch V2.3 na Cloudflare (somente PAPER e somente leitura).
+  Forex Watch V2.3: safe Windows installer; PAPER ONLY / read-only bot.
 .DESCRIPTION
-  Execute após descompactar o ZIP da branch deploy-ready, em PowerShell.
-  Sem -Activate: executa testes Node, autentica Cloudflare, cria KV caso necessário
-  e publica apenas no modo OBSERVE (sem Telegram).
-  Com -Activate: exige confirmação explícita, solicita segredos via prompt seguro
-  do Wrangler e então habilita ALERT_MODE=active.
-  NUNCA digite tokens no ChatGPT ou salve segredos no Git.
+  Default: offline tests, Wrangler dry-run, Cloudflare login, KV setup,
+  deploy OBSERVE only (no Telegram alerts, no Healthchecks heartbeat).
+  -Activate: confirms with operator, deploys OBSERVE first, then configures
+  three secrets locally via Wrangler prompts, deploys ACTIVE only at the end.
+  -PreflightOnly: offline tests and Wrangler compile; no login/remote writes.
+  NEVER paste credentials into ChatGPT, commits or source files.
 #>
 [CmdletBinding()]
-param([switch]$Activate)
-
+param(
+  [switch]$Activate,
+  [switch]$PreflightOnly
+)
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+if ($Activate -and $PreflightOnly) {
+  throw "Escolha apenas -PreflightOnly OU -Activate."
+}
 $Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $Config = Join-Path $PSScriptRoot "wrangler_v23.toml"
 $Worker = Join-Path $PSScriptRoot "forex_watch_v23_worker.mjs"
 $Tests = Join-Path $Root "tests/test_forex_watch_v23_worker.mjs"
+$PublishedActive = $false
 
-function Assert-Command($Name) {
-  if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
-    throw "Programa nao encontrado: $Name. Instale Node.js LTS e tente novamente."
+function Invoke-Wrangler {
+  param([string[]]$CommandArgs)
+  & npx.cmd --yes wrangler@4 @CommandArgs
+  if ($LASTEXITCODE -ne 0) {
+    throw "Falha no Wrangler ao executar: $($CommandArgs[0]) $($CommandArgs[1])"
   }
 }
-
-function Invoke-Checked([string[]]$Arguments) {
-  & npx @Arguments
-  if ($LASTEXITCODE -ne 0) { throw ("Falhou: npx "+($Arguments -join " ")) }
+function Set-AlertMode {
+  param([ValidateSet("observe","active")][string]$Mode)
+  $txt = Get-Content -LiteralPath $Config -Encoding UTF8 -Raw
+  if ($txt -notmatch '(?m)^ALERT_MODE\s*=\s*"(observe|active)"\s*$') {
+    throw "ALERT_MODE ausente/invalido no arquivo TOML. Nao publicar."
+  }
+  $txt = [regex]::Replace($txt, '(?m)^ALERT_MODE\s*=\s*"(observe|active)"\s*$',
+    ('ALERT_MODE = "'+$Mode+'"'))
+  [System.IO.File]::WriteAllText($Config,$txt,(New-Object System.Text.UTF8Encoding($false)))
+}
+function Has-KvBinding {
+  $txt = Get-Content -LiteralPath $Config -Encoding UTF8 -Raw
+  return ($txt -match '(?m)^\s*\[\[kv_namespaces\]\]\s*$')
 }
 
-Assert-Command "node"
-Assert-Command "npx"
-if (-not (Test-Path $Worker) -or -not (Test-Path $Tests) -or -not (Test-Path $Config)) {
-  throw "Arquivos do Forex Watch V2.3 nao encontrados no pacote."
+foreach ($name in @("node.exe","npx.cmd")) {
+  if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
+    throw "$name nao encontrado. Instale Node.js LTS (20+) e abra o PowerShell novamente."
+  }
+}
+if (-not ((Test-Path $Worker) -and (Test-Path $Tests) -and (Test-Path $Config))) {
+  throw "O pacote esta incompleto. Baixe novamente o ZIP da branch de revisao final."
+}
+$versionText = (& node.exe --version).Trim() -replace '^v',''
+if ([int]$versionText.Split('.')[0] -lt 20) {
+  throw "Node.js 20+ e necessario. Versao atual: $versionText"
 }
 Push-Location $Root
 try {
-  Write-Host "Forex Watch V2.3 | validando testes JavaScript (offline)..."
-  & node --test $Tests
-  if ($LASTEXITCODE -ne 0) { throw "Testes offline falharam. Implantacao bloqueada." }
+  Write-Host "[1/5] Executando testes offline..."
+  & node.exe --test $Tests
+  if ($LASTEXITCODE -ne 0) { throw "Testes falharam. Implantacao bloqueada." }
 
-  Write-Host "Autorizacao Cloudflare: use o navegador para entrar na SUA conta."
-  Invoke-Checked -Arguments @("wrangler","login")
-
-  $toml = Get-Content -Raw -Encoding UTF8 $Config
-  if ($toml -notmatch '(?m)^\[\[kv_namespaces\]\]') {
-    Write-Host "Criando namespace KV e adicionando binding INCIDENT_KV..."
-    Invoke-Checked -Arguments @("wrangler","kv","namespace","create","INCIDENT_KV","--binding","INCIDENT_KV","--config",$Config,"--update-config")
+  Write-Host "[2/5] Compilando Worker (dry-run, sem publicar)..."
+  Invoke-Wrangler -CommandArgs @("deploy","--dry-run","--config",$Config)
+  if ($PreflightOnly) {
+    Write-Host "Preflight aprovado. NENHUMA alteracao feita na Cloudflare."
+    return
   }
+
+  if ($Activate) {
+    Write-Host "ATENCAO: o processo publica primeiro OBSERVE (alertas off)."
+    Write-Host "Secrets serao informados na sua maquina pelo CLI oficial."
+    $confirmation = Read-Host "Digite ATIVAR para configurar os alertas externos"
+    if ($confirmation -cne "ATIVAR") { throw "Ativacao cancelada." }
+  }
+
+  Write-Host "[3/5] Login Cloudflare, pelo navegador oficial..."
+  Invoke-Wrangler -CommandArgs @("login")
+
+  if (-not (Has-KvBinding)) {
+    Write-Host "Criando/bindando KV INCIDENT_KV na sua conta Cloudflare..."
+    Invoke-Wrangler -CommandArgs @("kv","namespace","create","INCIDENT_KV",
+      "--binding","INCIDENT_KV","--config",$Config,"--update-config")
+    if (-not (Has-KvBinding)) { throw "Binding KV nao foi gravado no TOML." }
+  }
+  Set-AlertMode "observe"
+  Write-Host "[4/5] Publicando modo OBSERVE: sem Telegram e sem heartbeat..."
+  Invoke-Wrangler -CommandArgs @("deploy","--config",$Config)
 
   if (-not $Activate) {
-    Write-Host "Publicando SOMENTE modo observe. Nenhum alerta Telegram ativo."
-    $current = Get-Content -Raw -Encoding UTF8 $Config
-    if ($current -notmatch 'ALERT_MODE\s*=\s*"observe"') {
-      $current = $current -replace 'ALERT_MODE\s*=\s*"active"','ALERT_MODE = "observe"'
-      [System.IO.File]::WriteAllText($Config,$current,(New-Object System.Text.UTF8Encoding($false)))
-    }
-    Invoke-Checked -Arguments @("wrangler","deploy","--config",$Config)
-    Write-Host "Publicado em OBSERVE. Proxima etapa: crie bot Telegram e Healthchecks.io."
-    Write-Host "Depois execute este script com -Activate, sem compartilhar secrets."
-    exit 0
+    Write-Host "OBSERVE publicado. O monitor externo NAO notifica neste modo."
+    Write-Host "Configure Telegram e Healthchecks.io antes de executar com -Activate."
+    return
   }
 
-  Write-Host ""
-  Write-Host "ATIVACAO: requer Telegram Bot Token, Telegram Chat ID e Healthchecks Ping URL."
-  Write-Host "Esses segredos serao digitados no prompt do Wrangler, nunca aqui no chat."
-  $confirm = Read-Host "Digite ATIVAR para publicar alertas reais de monitoramento"
-  if ($confirm -cne "ATIVAR") { throw "Ativacao cancelada. Nenhum alerta habilitado." }
+  Write-Host "Confirme que criou Healthchecks.io e habilitou alertas no canal externo."
+  Write-Host "Iniciando configuracao dos tres secrets (nao serao mostrados aqui)..."
+  # Wrangler secret put immediately deploys a new Worker version.
+  # Keep local and remote ALERT_MODE=observe throughout ALL THREE operations.
+  Invoke-Wrangler -CommandArgs @("secret","put","TELEGRAM_BOT_TOKEN","--config",$Config)
+  Invoke-Wrangler -CommandArgs @("secret","put","TELEGRAM_CHAT_ID","--config",$Config)
+  Invoke-Wrangler -CommandArgs @("secret","put","MONITOR_HEARTBEAT_URL","--config",$Config)
 
-  $current = Get-Content -Raw -Encoding UTF8 $Config
-  if ($current -notmatch '(?m)^\[\[kv_namespaces\]\]') {
-    throw "Binding KV nao configurado."
-  }
-  if ($current -notmatch 'ALERT_MODE\s*=\s*"observe"' -and
-      $current -notmatch 'ALERT_MODE\s*=\s*"active"') {
-    throw "ALERT_MODE nao encontrado no arquivo Wrangler."
-  }
-  Invoke-Checked -Arguments @("wrangler","secret","put","TELEGRAM_BOT_TOKEN","--config",$Config)
-  Invoke-Checked -Arguments @("wrangler","secret","put","TELEGRAM_CHAT_ID","--config",$Config)
-  Invoke-Checked -Arguments @("wrangler","secret","put","MONITOR_HEARTBEAT_URL","--config",$Config)
-
-  $current = Get-Content -Raw -Encoding UTF8 $Config
-  $current = $current -replace 'ALERT_MODE\s*=\s*"observe"','ALERT_MODE = "active"'
-  [System.IO.File]::WriteAllText($Config,$current,(New-Object System.Text.UTF8Encoding($false)))
-  Invoke-Checked -Arguments @("wrangler","deploy","--config",$Config)
-  Write-Host "Cloudflare: alertas HABILITADOS na configuracao."
-  Write-Host "IMPORTANTE: valide teste real de Telegram e Healthchecks antes de considerar monitor operacional."
+  Write-Host "[5/5] Validando nova configuracao antes da publicacao ACTIVE..."
+  Set-AlertMode "active"
+  Invoke-Wrangler -CommandArgs @("deploy","--dry-run","--config",$Config)
+  Invoke-Wrangler -CommandArgs @("deploy","--config",$Config)
+  $PublishedActive = $true
+  Write-Host "ACTIVE publicado. Falta COMPROVAR entregas reais Telegram/Healthchecks."
 }
-finally { Pop-Location }
+finally {
+  if (-not $PublishedActive -and (Test-Path $Config)) {
+    # Fail closed locally. Secret uploads were done while remote was observe.
+    try { Set-AlertMode "observe" }
+    catch { Write-Warning "Confira manualmente ALERT_MODE no TOML antes de reutilizar." }
+  }
+  Pop-Location
+}
