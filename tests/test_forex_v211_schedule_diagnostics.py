@@ -425,5 +425,28 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         self.assertIn("invalid_risk_violations", kinds)
         self.assertNotIn("risk_violations", kinds)
 
+
+    def test_duplicate_page_is_reported(self):
+        page = {"total_count": 250, "workflow_runs": [run(i) for i in range(100)]}
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json",
+                   side_effect=[page, page]):
+            result = fetch_workflow_runs("https://api.github.com/repos/example/repo", max_pages=2)
+        self.assertIn("duplicate_page", result["pagination_anomalies"])
+        self.assertTrue(result["history_incomplete"])
+
+    def test_malformed_gap_halt_flag(self):
+        st = state(5)
+        st["gap_halt"] = "false"
+        result = diagnose([run(5)], st, NOW)
+        kinds = {a["type"] for a in result["anomalies"]}
+        self.assertIn("invalid_gap_halt_flag", kinds)
+        self.assertNotIn("gap_halt_or_data_gap", kinds)
+
+    def test_valid_gap_halt_true(self):
+        st = state(5)
+        st["gap_halt"] = True
+        kinds = {a["type"] for a in diagnose([run(5)], st, NOW)["anomalies"]}
+        self.assertIn("gap_halt_or_data_gap", kinds)
+
 if __name__ == "__main__":
     unittest.main()
