@@ -196,12 +196,19 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
     const timer = setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
     try {
       const headers={"Accept":"application/vnd.github+json",
-        "User-Agent":"Forex-Watch-V2.3.1","Cache-Control":"no-cache"};
+        "User-Agent":"Forex-Watch-V2.3.2","Cache-Control":"no-cache"};
       // Optional read-only repository credential, configured as Cloudflare secret.
       if(token) headers.Authorization="Bearer "+token;
       const response = await fetcher(url,{headers,cache:"no-store",signal:controller.signal});
       if (!response.ok) {
-        const err = new Error("GITHUB_"+resource+"_HTTP_"+response.status);
+        // Diagnose 403 without logging credentials, response bodies, or GitHub headers.
+        const remaining=response.headers?.get?.("x-ratelimit-remaining");
+        const retryAfter=response.headers?.get?.("retry-after");
+        const rateLimited=response.status===403 &&
+          (remaining==="0" || (retryAfter!==null && retryAfter!==undefined));
+        const code="GITHUB_"+resource+"_HTTP_"+response.status+
+          (rateLimited?"_RATE_LIMIT":"");
+        const err = new Error(code);
         if (!RETRY_CODES.has(response.status) || n===FETCH_ATTEMPTS-1) throw err;
       } else {
         const body=await response.text();
@@ -428,7 +435,7 @@ export async function runCheck(env, now=Date.now(), fetcher=fetch) {
     await assessContinuity(report,env,now);
   } catch(error) {
     const rawCode=String(error?.message||"");
-    const code=/^(GITHUB_(STATE|RUNS)_(HTTP_[0-9]{3}|RESPONSE_TOO_LARGE|INVALID_JSON|TIMEOUT|NETWORK_ERROR)|STATE_BASE64_OR_JSON_INVALID)$/.test(rawCode)
+    const code=/^(GITHUB_(STATE|RUNS)_(HTTP_[0-9]{3}(?:_RATE_LIMIT)?|RESPONSE_TOO_LARGE|INVALID_JSON|TIMEOUT|NETWORK_ERROR)|STATE_BASE64_OR_JSON_INVALID)$/.test(rawCode)
       ? rawCode:rawCode==="GitHub state file format invalid"?"STATE_FILE_FORMAT_INVALID":
         rawCode==="Missing GitHub workflow_runs"?"GITHUB_RUNS_MALFORMED":"MONITOR_UNAVAILABLE";
     // Log only a controlled error code, never an HTTP body or credential.
