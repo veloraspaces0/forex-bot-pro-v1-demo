@@ -20,7 +20,7 @@ def fetch_json(url):
 
 def fetch_workflow_runs(base, max_pages=5):
     """Fetch bounded run history; fail closed if the API omits expected runs."""
-    if not isinstance(max_pages, int) or not 1 <= max_pages <= 20:
+    if type(max_pages) is not int or not 1 <= max_pages <= 20:
         raise ValueError("max_pages must be between 1 and 20")
     all_runs = []
     seen_ids = set()
@@ -65,6 +65,8 @@ def fetch_workflow_runs(base, max_pages=5):
             "pagination_anomalies": sorted(set(pagination_anomalies))}
 
 def parse_time(value):
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Timestamp must be a nonempty ISO string")
     parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
         raise ValueError("Timezone missing in timestamp")
@@ -87,7 +89,6 @@ def diagnose(runs, state, now):
         raise ValueError("Invalid workflow run item")
     scheduled = sorted(
         (r for r in runs if r.get("head_branch") == "main"
-         and r.get("name") == "Forex Bot Pro V2 - Paper EURUSD"
          and r.get("event") == "schedule"),
         key=lambda r: parse_time(r["created_at"]), reverse=True,
     )
