@@ -1,0 +1,58 @@
+{
+  "version": 2,
+  "mode": "PAPER_ONLY",
+  "source": "Twelve Data",
+  "pair": "EUR/USD",
+  "interval": "15min",
+  "initial_balance": 100,
+  "balance": 99.5,
+  "estimated_equity": 99.5,
+  "pnl_total": -0.5,
+  "closed_trades": 1,
+  "wins": 0,
+  "losses": 1,
+  "win_rate_pct": 0.0,
+  "max_closed_drawdown_pct": 0.5,
+  "max_risk_pct": 0.5,
+  "daily_loss_limit_pct": 2,
+  "open_position": false,
+  "position_side": null,
+  "status": "monitoring",
+  "message": "5 candles novos processados; simulação.",
+  "updated_at": "2026-11-04T10:41:37Z",
+  "last_checked_at": "2026-11-04T10:41:37Z",
+  "last_candle_at": "2026-11-04T10:15:00Z",
+  "equity_curve": [
+    {
+      "n": 0,
+      "balance": 100
+    },
+    {
+      "n": 1,
+      "balance": 99.5
+    }
+  ],
+  "closed_results": [
+    {
+      "at": "2026-11-04T07:30:00Z",
+      "side": "SELL",
+      "pnl": -0.5,
+      "reason": "STOP"
+    }
+  ],
+  "events": [
+    {
+      "at": "2026-11-04T07:30:00Z",
+      "message": "SELL closed STOP P/L -0.50"
+    },
+    {
+      "at": "2026-11-04T07:11:10Z",
+      "message": "SELL simulated 346 EUR, approx risk $0.50"
+    },
+    {
+      "at": "2026-11-04T03:12:55Z",
+      "message": "Initialized indicators; no historical trades."
+    }
+  ],
+  "notice": "Paper-only estimates. No orders, no real fills. Published metrics exclude raw market candles."
+}
