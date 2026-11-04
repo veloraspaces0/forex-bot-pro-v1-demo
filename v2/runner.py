@@ -22,8 +22,8 @@ def cipher(key_text):
     key = hashlib.pbkdf2_hmac('sha256',secret.encode('utf-8'),b'fxbot-v2-v1',180000,32)
     return AESGCM(key)
 
-def decrypt(key):
-    raw = base64.b64decode(ENC.read_bytes().strip(),validate=True)
+def decrypt(key, path=None):
+    raw = base64.b64decode((Path(path) if path is not None else ENC).read_bytes().strip(),validate=True)
     if raw[:3] != HEADER or len(raw)<32: raise ValueError('Invalid encrypted state header')
     plain = cipher(key).decrypt(raw[3:15],raw[15:],AAD)
     bot.validate_state(json.loads(plain))  # wrong-key / corruption fails closed
@@ -53,11 +53,11 @@ def atomic_write(path, content):
         if name is not None:
             Path(name).unlink(missing_ok=True)
 
-def encrypt(key, plaintext):
+def encrypt(key, plaintext, path=None):
     bot.validate_state(json.loads(plaintext))
     nonce = os.urandom(12)
     sealed = HEADER+nonce+cipher(key).encrypt(nonce,plaintext,AAD)
-    atomic_write(ENC,base64.b64encode(sealed)+b'\n')
+    atomic_write(Path(path) if path is not None else ENC,base64.b64encode(sealed)+b'\n')
 
 def summary(s):
     bot.validate_state(s)
@@ -86,7 +86,9 @@ def summary(s):
         status=s['status'],message=s['message'],updated_at=s.get('updated_at'),
         last_checked_at=s.get('last_checked_at'),last_candle_at=s.get('last_bar'),
         equity_curve=curve,
-        closed_results=[dict(at=t['exit_at'],side=t['side'],pnl=round(t['pnl'],2),reason=t['reason'])
+        closed_results=[dict(at=t['exit_at'],side=t['side'],pnl=round(t['pnl'],2),reason=t['reason'],
+            planned_risk_usd=round(t['planned_risk_usd'],4) if t.get('planned_risk_usd') is not None else None,
+            risk_exceeded=(t['pnl'] < -t['planned_risk_usd']-.000001) if t.get('planned_risk_usd') is not None else None)
                         for t in trades[-20:]][::-1],
         events=s['events'][-12:][::-1],
         notice='Paper estimates only. Gaps and variable costs may exceed planned risk; no real orders.')
@@ -112,8 +114,7 @@ def main():
                 if old.get('closed_trades',0) or old.get('open_position') or old.get('last_candle_at'):
                     raise RuntimeError('Encrypted state missing; refusing to reset paper history')
             data=json.dumps(bot.initial()).encode('utf-8')
-        bot.P.write_bytes(data)
-        os.chmod(bot.P,0o600)
+        atomic_write(bot.P,data)
         bot.main()
         updated=bot.P.read_bytes()
         updated_state=bot.validate_state(json.loads(updated))
