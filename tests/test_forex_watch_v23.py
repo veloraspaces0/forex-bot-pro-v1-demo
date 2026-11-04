@@ -306,5 +306,12 @@ class V23GreenWorkflowChecks(unittest.TestCase):
         report=watch.assess(state(age=4,candle_age=20,opened=True),rr,NOW)
         self.assertNotIn("SUCCESS_WITHOUT_NEW_STATE",reasons(report))
 
+class V23CashConsistency(unittest.TestCase):
+    def test_cash_does_not_match_full_closed_results(self):
+        result=watch.assess(state(balance=101,equity_curve=[{"n":0,"balance":100},
+                           {"n":1,"balance":101}]),runs(),NOW)
+        self.assertIn("PUBLIC_HISTORY_INCONSISTENT",reasons(result))
+        self.assertEqual(result["status"],"CRITICO")
+
 if __name__ == "__main__":
     unittest.main()
