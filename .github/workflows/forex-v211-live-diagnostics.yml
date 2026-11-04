@@ -43,6 +43,7 @@ jobs:
               'invalid_queue_timestamp_count':r.get('invalid_queue_timestamp_count'),
               'queue_delay_coverage_pct':r.get('queue_delay_coverage_pct'),
               'recent_schedule_gaps':r.get('recent_schedule_gaps'),
+              'cron_slot_evidence':r.get('cron_slot_evidence'),
               'max_dispatch_offset_minutes':r.get('max_dispatch_offset_minutes'),
               'max_recent_dispatch_offset_minutes':r.get('max_recent_dispatch_offset_minutes'),
               'last_run_age_minutes':r.get('last_run_age_minutes'),
