@@ -17,11 +17,11 @@
   "daily_loss_limit_pct": 2,
   "open_position": false,
   "position_side": null,
-  "status": "awaiting_api_key",
-  "message": "Aguardando configuração do secret TWELVE_DATA_API_KEY.",
-  "updated_at": null,
-  "last_checked_at": null,
-  "last_candle_at": null,
+  "status": "monitoring",
+  "message": "Histórico inicial carregado. Aguardando próximo candle.",
+  "updated_at": "2026-11-04T03:12:55Z",
+  "last_checked_at": "2026-11-04T03:12:55Z",
+  "last_candle_at": "2026-11-04T02:45:00Z",
   "equity_curve": [
     {
       "n": 0,
@@ -29,6 +29,11 @@
     }
   ],
   "closed_results": [],
-  "events": [],
-  "notice": "Paper trading sem ordens reais. Resumo público não contém preços brutos do mercado."
+  "events": [
+    {
+      "at": "2026-11-04T03:12:55Z",
+      "message": "Initialized indicators; no historical trades."
+    }
+  ],
+  "notice": "Paper-only estimates. No orders, no real fills. Published metrics exclude raw market candles."
 }
