@@ -684,3 +684,41 @@ test("GitHub 403 never leaks token or error response body into incident",async()
   assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403"));
   assert.ok(!JSON.stringify(out.report).includes(secret));
 });
+
+test("secondary GitHub 403 rate limit is classified without leaking response body",async()=>{
+  const secret="DO_NOT_LOG_THIS_TEST_SECRET";
+  const fetcher=async()=>new Response(JSON.stringify({message:"You have exceeded a secondary rate limit "+secret}),{status:403});
+  const out=await runCheck({},NOW,fetcher);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403_RATE_LIMIT"));
+  assert.ok(!JSON.stringify(out.report).includes(secret));
+});
+test("403 with token and no rate-limit evidence suggests permission, not proven revocation",async()=>{
+  const fetcher=async()=>new Response("forbidden",{status:403});
+  const out=await runCheck({GITHUB_READ_TOKEN:"TEST_ONLY"},NOW,fetcher);
+  assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403_POSSIBLE_PERMISSION"));
+});
+test("secondary 403 is retried and can recover on the next attempt",async()=>{
+  let stateCalls=0,runsCalls=0;
+  const fetcher=async url=>{
+    if(String(url).includes("/contents/")){
+      stateCalls++;
+      if(stateCalls===1)return new Response("secondary rate limit",{status:403});
+      return new Response(JSON.stringify({encoding:"base64",content:Buffer.from(JSON.stringify(state())).toString("base64")}),{status:200});
+    }
+    runsCalls++;
+    return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+  };
+  const out=await readPublic(NOW,fetcher);
+  assert.equal(out.status,"OK");
+  assert.equal(stateCalls,2);
+  assert.equal(runsCalls,1);
+});
+test("partial GitHub failure remains INDETERMINADO (no false healthy claim)",async()=>{
+  const fetcher=async url=>String(url).includes("/contents/")
+    ? new Response(JSON.stringify({encoding:"base64",content:Buffer.from(JSON.stringify(state())).toString("base64")}),{status:200})
+    : new Response("denied",{status:403});
+  const out=await runCheck({},NOW,fetcher);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_RUNS_HTTP_403"));
+});
