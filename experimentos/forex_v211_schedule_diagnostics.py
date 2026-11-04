@@ -140,6 +140,14 @@ def diagnose(runs, state, now):
     report["recent_scheduled_runs"] = sum(parse_time(r["created_at"]) >= recent_cutoff for r in scheduled)
     report["historical_scheduled_runs"] = len(scheduled) - report["recent_scheduled_runs"]
     report["queue_delays_minutes"] = []
+    report["schedule_dispatch_offsets_minutes"] = []
+    # Expected cron minutes are 07, 22, 37, 52 UTC. Created_at is
+    # a GitHub run-creation timestamp, not proof of the actual trigger time.
+    for r in scheduled:
+        stamp = parse_time(r["created_at"])
+        seconds_after_slot = ((stamp.minute - 7) % 15) * 60 + stamp.second + stamp.microsecond / 1_000_000
+        report["schedule_dispatch_offsets_minutes"].append(round(seconds_after_slot / 60, 2))
+    report["max_dispatch_offset_minutes"] = max(report["schedule_dispatch_offsets_minutes"], default=None)
     for a, b in zip(scheduled, scheduled[1:]):
         gap = round((parse_time(a["created_at"]) - parse_time(b["created_at"])).total_seconds()/60, 2)
         report["intervals_minutes"].append(gap)
