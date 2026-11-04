@@ -109,6 +109,8 @@ def diagnose(runs, state, now):
             if queue_delay > 10:
                 report["anomalies"].append({"type": "runner_queue_delay",
                                             "minutes": queue_delay, "run": r.get("html_url")})
+        if r.get("conclusion") == "success" and r.get("status") not in (None, "completed"):
+            report["anomalies"].append({"type": "inconsistent_run_status", "run": r.get("html_url")})
         if r.get("status") in ("queued", "in_progress", "waiting", "pending", "requested"):
             report["anomalies"].append({"type": "run_not_completed", "run": r.get("html_url"),
                                         "status": r["status"]})
