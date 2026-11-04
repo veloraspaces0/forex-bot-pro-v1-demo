@@ -235,6 +235,7 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
         retryDelay=Math.max(retryDelay,Math.max(0,wait));
       }
       await pause(retryDelay);
+      continue;
     } catch(error){
       const msg=String(error?.message||"");
       const code=error?.name==="AbortError"?"GITHUB_"+resource+"_TIMEOUT":
@@ -256,10 +257,23 @@ export async function readPublic(now=Date.now(), fetcher=fetch, token=null) {
       } catch(error) {
         if(!/^GITHUB_STATE_HTTP_(403|429)/.test(String(error?.message||""))) throw error;
         const rawUrl="https://raw.githubusercontent.com/"+GITHUB_REPO+"/main/v2/state.json";
-        const response=await fetcher(rawUrl,{headers:{"Accept":"application/json",
-          "User-Agent":"Forex-Watch-V2.3.2"},cache:"no-store",redirect:"error"});
-        if(!response.ok) throw error; // retain the original diagnostic
-        const body=await response.text();
+        // Bound the fallback independently; a hung raw endpoint must not
+        // prevent the monitor from reaching its fail-closed state.
+        const fallbackController=new AbortController();
+        const fallbackTimer=setTimeout(()=>fallbackController.abort(),FETCH_TIMEOUT_MS);
+        let body;
+        try {
+          const response=await fetcher(rawUrl,{headers:{"Accept":"application/json",
+            "User-Agent":"Forex-Watch-V2.3.3"},cache:"no-store",redirect:"error",
+            signal:fallbackController.signal});
+          if(!response.ok) throw error; // preserve the REST diagnostic
+          body=await response.text();
+        } catch(fallbackError) {
+          if(fallbackError?.name==="AbortError")
+            throw new Error("GITHUB_STATE_RAW_TIMEOUT");
+          throw fallbackError;
+        } finally {clearTimeout(fallbackTimer);}
+
         if(body.length>MAX_API_BYTES) throw new Error("GITHUB_STATE_RESPONSE_TOO_LARGE");
         let parsed;
         try { parsed=JSON.parse(body); } catch { throw new Error("GITHUB_STATE_INVALID_JSON"); }
