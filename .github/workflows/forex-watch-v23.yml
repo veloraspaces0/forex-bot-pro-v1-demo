@@ -51,8 +51,10 @@ jobs:
             echo "HTTP 403 regression cycle $i/50"
             if node --test --test-name-pattern='HTTP 403 adversarial matrix|HTTP 403/429 fault injection|403 API rate limit exceeded body|oversized GitHub response|chunked oversized GitHub JSON|raw fallback rejects oversized|rate limit reset beyond retry budget|Retry-After above retry budget|50 distinct long reset windows|malformed Retry-After|HTTP-date Retry-After above retry budget' tests/test_forex_watch_v23_worker.mjs > audit-results/cycle-$i.log 2>&1; then
               passed=$(sed -n 's/^# pass \([0-9][0-9]*\)$/\1/p' audit-results/cycle-$i.log | tail -1)
-              if [ -z "$passed" ] || [ "$passed" -lt 11 ]; then
-                echo "FAIL cycle $i/50: only ${passed:-0} matching tests passed (minimum 11)" | tee -a audit-results/50-cycle-results.txt
+              skipped=$(sed -n 's/^# skipped \([0-9][0-9]*\)$/\1/p' audit-results/cycle-$i.log | tail -1)
+              failed=$(sed -n 's/^# fail \([0-9][0-9]*\)$/\1/p' audit-results/cycle-$i.log | tail -1)
+              if [ -z "$passed" ] || [ "$passed" -ne 11 ] || [ "${failed:-0}" -ne 0 ]; then
+                echo "FAIL cycle $i/50: expected exactly 11 passed, got ${passed:-0}, failures ${failed:-0}" | tee -a audit-results/50-cycle-results.txt
                 cat audit-results/cycle-$i.log
                 exit 1
               fi
