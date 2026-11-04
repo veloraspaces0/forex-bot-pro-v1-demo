@@ -3,7 +3,7 @@
 import os, json, math, urllib.parse, urllib.request
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
-P=Path(__file__).parent/'state.json'
+P=Path(__file__).parent/'state.private.json'
 UTC=timezone.utc
 STEP=timedelta(minutes=15)
 SPREAD=.00012
