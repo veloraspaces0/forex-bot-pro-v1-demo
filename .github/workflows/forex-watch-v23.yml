@@ -54,3 +54,15 @@ jobs:
           assert "git push" not in text and "workflow_dispatch" not in text, "No GitHub write/trigger actions"
           print("Experimental CI: Worker static checks OK; no scheduled deployment.")
           PY
+
+  windows-preflight:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Execute real PowerShell user preflight (NO login, NO deploy)
+        shell: powershell
+        run: .\\experimentos\\setup_watch_v23.ps1 -PreflightOnly
