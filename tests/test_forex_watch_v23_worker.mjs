@@ -484,3 +484,25 @@ test("missing or invalid ALERT_MODE is rejected, not silently observe",async()=>
     assert.equal(called,0);
   }
 });
+
+
+test("fresh GitHub workflow but missing Twelve Data key must be CRITICO",()=>{
+  const result=assess(state(4,20,false,NOW,{status:"awaiting_api_key"}),runs(),NOW);
+  assert.equal(result.status,"CRITICO");
+  assert.ok(codes(result).includes("API_CREDENTIAL_MISSING"));
+});
+test("market_closed_or_stale while Forex session open with position must be CRITICO",()=>{
+  const result=assess(state(4,20,true,NOW,{status:"market_closed_or_stale"}),runs(),NOW);
+  assert.equal(result.status,"CRITICO");
+  assert.ok(codes(result).includes("MARKET_DATA_NOT_FRESH"));
+});
+test("market_closed_or_stale on Saturday is not a reason to panic",()=>{
+  const sat=Date.parse("2026-11-07T16:00:00Z");
+  const result=assess(state(4,2000,false,sat,{status:"market_closed_or_stale"}),runs([4,19,34,49,64],sat),sat);
+  assert.ok(!codes(result).includes("MARKET_DATA_NOT_FRESH"));
+});
+test("arbitrary unexpected engine status is not falsely green",()=>{
+  const result=assess(state(4,20,false,NOW,{status:"internal_error"}),runs(),NOW);
+  assert.equal(result.status,"ATENCAO");
+  assert.ok(codes(result).includes("UNRECOGNIZED_BOT_STATUS"));
+});
