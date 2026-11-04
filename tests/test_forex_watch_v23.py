@@ -99,6 +99,22 @@ class V23(unittest.TestCase):
             with self.subTest(updates=updates), self.assertRaises(ValueError):
                 watch.assess(state(**updates), runs(), NOW)
 
+    def test_public_history_consistency_alarm(self):
+        broken_cases = (
+            {"closed_trades": 2},
+            {"wins": 2},
+            {"losses": 2},
+            {"closed_results": []},
+            {"equity_curve": [{"n": 0, "balance": 100}]},
+            {"equity_curve": [{"n": 1, "balance": 95}]},
+            {"pnl_total": -9.0},
+        )
+        for update in broken_cases:
+            with self.subTest(update=update):
+                out=watch.assess(state(**update),runs(),NOW)
+                self.assertEqual(out["status"],"CRITICO")
+                self.assertIn("PUBLIC_HISTORY_INCONSISTENT",reasons(out))
+
     def test_gap_halt(self):
         out = watch.assess(state(gap_halt=True), runs(), NOW)
         self.assertIn("DATA_GAP", reasons(out))
