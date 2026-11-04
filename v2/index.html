@@ -2,7 +2,7 @@
 <html lang="pt-BR"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#0b1220">
-<title>Forex Bot Pro V2 · Paper EUR/USD</title>
+<title>Forex Bot Pro V2.1 · Paper EUR/USD</title>
 <style>
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;background:#0b1220;color:#edf2ff}
 *{box-sizing:border-box}body{margin:0}main{max-width:1090px;margin:auto;padding:22px}
@@ -70,7 +70,7 @@ footer{font-size:12px;color:#a1b0c8;line-height:1.7;margin:19px 0}
 <a class="button" href="https://github.com/veloraspaces0/forex-bot-pro-v1-demo/actions/workflows/forex-v2.yml" target="_blank" rel="noopener">Ver execuções</a>
 </div>
 <p class="muted sub">Nome do secret: <b>TWELVE_DATA_API_KEY</b>. O GitHub tenta rodar a cada 15 minutos, mas atrasos ou falhas são possíveis. Primeira execução inicializa os indicadores sem criar trades passados.</p></section>
-<footer>Fonte de dados: Twelve Data. Estratégia experimental EMA 9/21 + RSI 14 e SL/TP com ATR. Execuções e spreads são estimados; gaps, latência, falta de liquidez, slippage e custos reais podem alterar muito o desempenho. Não é conselho de investimento. O painel público contém apenas métricas derivadas. <a href="../v1.html">Abrir V1 com preços artificiais</a>.</footer>
+<footer>Fonte de dados: Twelve Data. Estratégia experimental EMA 9/21 + RSI 14 e SL/TP com ATR. Execuções e spreads são estimados; gaps, latência, falta de liquidez, slippage e custos reais podem alterar muito o desempenho. Não é conselho de investimento. O painel público contém apenas métricas derivadas. Recuperações após falhas de dados podem deixar intervalos sem trades simulados; ver eventos de recuperação. <a href="../v1.html">Abrir V1 com preços artificiais</a>.</footer>
 </main>
 <script>
 "use strict";
@@ -97,7 +97,7 @@ function statusLabel(v,updated){
  let stale=updated&&Date.now()-Date.parse(updated)>45*60*1000;
  if(v==='monitoring'&&stale)return ['ATRASADO','err'];
  let labels={monitoring:['MONITORANDO','ok'],awaiting_api_key:['AGUARDANDO API',''],
- market_closed_or_stale:['MERCADO INATIVO',''],api_error:['ERRO DA API','err'],data_gap:['PAUSADO · DADOS','err']};
+ market_closed_or_stale:['MERCADO INATIVO',''],api_error:['ERRO DA API','err'],data_gap:['PAUSADO · DADOS','err'],recovery_paused:['RECUPERADO · AGUARDANDO','']};
  return labels[v]||['VERIFICANDO',''];
 }
 function render(data){
@@ -121,7 +121,7 @@ function render(data){
  el('curveInfo').textContent=(data.closed_trades||0)+' operações fechadas · Curva do saldo realizado, não do câmbio EUR/USD.';
  const trades=el('trades');trades.replaceChildren();
  if(!data.closed_results?.length)trades.textContent='Nenhuma operação encerrada.';
- else data.closed_results.forEach(t=>line(trades,dateTxt(t.at)+' · '+t.side+' · '+t.reason,(t.pnl>=0?'+':'')+money(t.pnl)));
+ else data.closed_results.forEach(t=>{const warning=t.risk_exceeded===true?' · ⚠ RISCO EXCEDIDO':'';const budget=t.planned_risk_usd==null?'':' · risco planejado '+money(t.planned_risk_usd);line(trades,dateTxt(t.at)+' · '+t.side+' · '+t.reason+warning,(t.pnl>=0?'+':'')+money(t.pnl)+budget);});
  const events=el('events');events.replaceChildren();
  if(!data.events?.length)events.textContent='Nenhum evento ainda.';
  else data.events.forEach(e=>line(events,dateTxt(e.at),e.message));
