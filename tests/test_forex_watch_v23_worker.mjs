@@ -792,3 +792,44 @@ for(let caseNo=0;caseNo<50;caseNo++){
     if(stateDenied) assert.ok(seen.some(x=>x.u.startsWith("https://raw.githubusercontent.com/")));
   });
 }
+
+/**
+ * Additional 50 HTTP 403 and 429 fault-injection cases (#51-100).
+ * Tests remain isolated and do not touch GitHub, Cloudflare or Telegram live.
+ */
+for(let caseNo=50;caseNo<100;caseNo++){
+  test("HTTP 403/429 fault injection #"+String(caseNo+1).padStart(3,"0"),async()=>{
+    const variant=caseNo%10;
+    const secret="FAKE_SECRET_NOT_REAL";
+    const seen=[];
+    const state403=variant!==0;
+    const stateStatus=variant===1?429:403;
+    const rawStatus=[2,5,8].includes(variant)?403:200;
+    const runsStatus=[3,6].includes(variant)?403:200;
+    const fake=async(url,options={})=>{
+      const u=String(url);
+      seen.push({url:u,authorization:options.headers?.Authorization});
+      if(u.includes("/contents/")&&state403){
+        const headers=variant===4?{"x-ratelimit-remaining":"0",
+          "x-ratelimit-reset":String(Math.floor(Date.now()/1000)+3600)}:{};
+        return new Response("forbidden",{status:stateStatus,headers});
+      }
+      if(u.startsWith("https://raw.githubusercontent.com/"))
+        return new Response(rawStatus===200?JSON.stringify(state()):"forbidden",
+          {status:rawStatus});
+      if(u.includes("/actions/"))
+        return new Response(runsStatus===200?JSON.stringify({workflow_runs:runs()}):"forbidden",
+          {status:runsStatus});
+      return new Response(JSON.stringify({encoding:"base64",
+        content:Buffer.from(JSON.stringify(state())).toString("base64")}),{status:200});
+    };
+    const token=caseNo%2?secret:null;
+    const out=await runCheck(token?{GITHUB_READ_TOKEN:token}:{},NOW,fake);
+    const shouldSucceed=(!state403||rawStatus===200)&&runsStatus===200;
+    assert.equal(out.report.status,shouldSucceed?"OK":"INDETERMINADO");
+    assert.ok(!JSON.stringify(out).includes(secret));
+    assert.ok(seen.filter(x=>x.url.startsWith("https://raw.githubusercontent.com/"))
+      .every(x=>!x.authorization));
+    assert.ok(seen.every(x=>!x.url.includes(secret)));
+  });
+}
