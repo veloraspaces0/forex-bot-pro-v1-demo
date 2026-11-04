@@ -4,6 +4,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import time
 import sys
 import urllib.request
 import urllib.error
@@ -20,7 +21,7 @@ def forex_market_open(now):
     weekday = local.weekday()
     return weekday < 4 or (weekday == 4 and local.hour < 17) or (weekday == 6 and local.hour >= 17)
 
-def fetch_json(url):
+def fetch_json(url, attempts=3):
     headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "forex-v211-readonly-diagnostics",
@@ -28,8 +29,27 @@ def fetch_json(url):
     if url.startswith(f"https://api.github.com/repos/{REPO}/") and os.getenv("GITHUB_TOKEN"):
         headers["Authorization"] = "Bearer " + os.environ["GITHUB_TOKEN"]
     request = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(request, timeout=15) as response:
-        return json.load(response)
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as exc:
+            remaining = exc.headers.get("x-ratelimit-remaining")
+            retry_after = exc.headers.get("retry-after")
+            transient = exc.code in (429, 500, 502, 503, 504) or (exc.code == 403 and (remaining == "0" or retry_after is not None))
+            if not transient or attempt == attempts - 1:
+                raise
+            delay = min(8, 2 ** attempt)
+            if retry_after is not None:
+                try:
+                    delay = min(8, max(delay, float(retry_after)))
+                except ValueError:
+                    pass
+            time.sleep(delay)
+        except (urllib.error.URLError, TimeoutError):
+            if attempt == attempts - 1:
+                raise
+            time.sleep(min(8, 2 ** attempt))
 
 def fetch_workflow_runs(base, max_pages=5):
     """Fetch bounded run history; fail closed if the API omits expected runs."""
