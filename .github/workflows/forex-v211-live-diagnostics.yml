@@ -38,6 +38,8 @@ jobs:
               'state_age_minutes':r.get('state_age_minutes'),
               'anomaly_types':sorted({x['type'] for x in r['anomalies']}),
               'anomaly_count':len(r['anomalies']),
+              'historical_anomaly_count':len(r.get('historical_anomalies', [])),
+              'historical_anomaly_types':sorted({x['type'] for x in r.get('historical_anomalies', [])}),
               'diagnostic_note':r.get('diagnostic_note'),
           },indent=2))
           PY
