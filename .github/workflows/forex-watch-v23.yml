@@ -5,6 +5,7 @@ on:
     branches:
       - experimento-forex-watch-v23-20261104
       - hardening-forex-watch-v23-20261104
+      - deploy-ready-forex-watch-v23-20261104
     paths:
       - 'experimentos/forex_watch_v23.py'
       - 'experimentos/forex_watch_v23_worker.mjs'
