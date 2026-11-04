@@ -833,3 +833,11 @@ for(let caseNo=50;caseNo<100;caseNo++){
     assert.ok(seen.every(x=>!x.url.includes(secret)));
   });
 }
+
+// GitHub may omit rate-limit headers while returning this documented error body.
+test("403 API rate limit exceeded body is classified as rate limit",async()=>{
+  const fetcher=async()=>new Response(JSON.stringify({message:"API rate limit exceeded for this IP"}),{status:403});
+  const out=await runCheck({},NOW,fetcher);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403_RATE_LIMIT"));
+});
