@@ -681,7 +681,7 @@ test("GitHub 403 never leaks token or error response body into incident",async()
   };
   const out=await runCheck({GITHUB_READ_TOKEN:secret},NOW,denied);
   assert.equal(out.report.status,"INDETERMINADO");
-  assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403"));
+  assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403_POSSIBLE_PERMISSION"));
   assert.ok(!JSON.stringify(out.report).includes(secret));
 });
 
