@@ -38,6 +38,7 @@ jobs:
               'max_queue_delay_minutes':r.get('max_queue_delay_minutes'),
               'recent_schedule_gaps':r.get('recent_schedule_gaps'),
               'max_dispatch_offset_minutes':r.get('max_dispatch_offset_minutes'),
+              'max_recent_dispatch_offset_minutes':r.get('max_recent_dispatch_offset_minutes'),
               'last_run_age_minutes':r.get('last_run_age_minutes'),
               'last_success_age_minutes':r.get('last_success_age_minutes'),
               'state_age_minutes':r.get('state_age_minutes'),
