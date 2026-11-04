@@ -19,9 +19,15 @@ def fetch_json(url):
         return json.load(response)
 
 def parse_time(value):
-    return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("Timezone missing in timestamp")
+    return parsed.astimezone(UTC)
 
 def diagnose(runs, state, now):
+    if now.tzinfo is None:
+        raise ValueError("now must be timezone-aware")
+    now = now.astimezone(UTC)
     scheduled = sorted(
         (r for r in runs if r.get("head_branch") == "main"
          and r.get("name") == "Forex Bot Pro V2 - Paper EURUSD"
@@ -37,6 +43,13 @@ def diagnose(runs, state, now):
             report["anomalies"].append({"type": "schedule_interval", "minutes": gap,
                                         "newer_run": a["html_url"]})
     for r in scheduled:
+        created = parse_time(r["created_at"])
+        started = parse_time(r["run_started_at"]) if r.get("run_started_at") else None
+        if started is not None:
+            queue_delay = round((started - created).total_seconds() / 60, 2)
+            if queue_delay > 10:
+                report["anomalies"].append({"type": "runner_queue_delay",
+                                            "minutes": queue_delay, "run": r.get("html_url")})
         if r.get("conclusion") in ("failure", "cancelled"):
             report["anomalies"].append({"type": "workflow_failure", "run": r["html_url"],
                                         "conclusion": r["conclusion"]})
@@ -58,10 +71,15 @@ def diagnose(runs, state, now):
         if state.get("open_position") and age > 35:
             report["anomalies"].append({"type": "critical_open_position_unchecked",
                                         "minutes": round(age, 2)})
+    if not updated:
+        report["anomalies"].append({"type": "missing_state_timestamp"})
     if state.get("status") == "api_error":
         report["anomalies"].append({"type": "api_error"})
     if state.get("gap_halt") or state.get("status") in ("data_gap", "gap_halt"):
         report["anomalies"].append({"type": "gap_halt_or_data_gap"})
+    report["diagnostic_note"] = ("Schedule gaps do not prove whether GitHub omitted triggers, "
+                                 "delayed dispatch, or queued jobs. Compare API run history "
+                                 "and queue delays before attributing root cause.")
     report["position_side"] = state.get("position_side") if state.get("open_position") else None
     report["balance"] = state.get("balance")
     report["estimated_equity"] = state.get("estimated_equity")
@@ -81,7 +99,7 @@ def main():
                  fetch_json(f"https://raw.githubusercontent.com/{REPO}/main/v2/state.json"))
         print(json.dumps(diagnose(runs["workflow_runs"], state, dt.datetime.now(UTC)),
                          indent=2, ensure_ascii=False))
-    except (OSError, ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"VERIFICATION_FAILED: {exc}", file=sys.stderr)
         return 2
     return 0
