@@ -201,6 +201,22 @@ class ManualRecoveryAdversarial(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'No newer completed candle'):
             recovery.propose_recovery(s,data,now,'Operator reviewed snapshot')
 
+    def test_recovery_refuses_apply_to_repository_path(self):
+        from contextlib import redirect_stderr
+        with tempfile.TemporaryDirectory() as folder:
+            outside=Path(folder)
+            data,now=self.good_snapshot()
+            reviewed=outside/'reviewed.json'
+            reviewed.write_text(json.dumps(data))
+            with redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as stop:
+                    recovery.main(['--state',str(ROOT/'v2'/'state.enc'),
+                        '--snapshot',str(reviewed),'--reason','Reviewed exchange holiday',
+                        '--apply','--acknowledge-skipped-paper-trades',
+                        '--backup',str(outside/'recovery-backup.enc')])
+            self.assertEqual(stop.exception.code,2)
+            self.assertFalse((outside/'recovery-backup.enc').exists())
+
     def test_backup_is_exclusive(self):
         with tempfile.TemporaryDirectory() as folder:
             target=Path(folder)/'original.enc'
