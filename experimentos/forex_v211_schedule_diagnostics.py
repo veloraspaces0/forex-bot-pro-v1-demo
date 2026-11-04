@@ -61,7 +61,10 @@ def diagnose(runs, state, now):
             if queue_delay > 10:
                 report["anomalies"].append({"type": "runner_queue_delay",
                                             "minutes": queue_delay, "run": r.get("html_url")})
-        if r.get("conclusion") in ("failure", "cancelled"):
+        if r.get("status") in ("queued", "in_progress", "waiting", "pending", "requested"):
+            report["anomalies"].append({"type": "run_not_completed", "run": r.get("html_url"),
+                                        "status": r["status"]})
+        if r.get("conclusion") in ("failure", "cancelled", "timed_out", "action_required", "startup_failure"):
             report["anomalies"].append({"type": "workflow_failure", "run": r["html_url"],
                                         "conclusion": r["conclusion"]})
     if scheduled:
@@ -79,6 +82,9 @@ def diagnose(runs, state, now):
         report["state_age_minutes"] = age
         if age is not None and age > 30:
             report["anomalies"].append({"type": "state_stale", "minutes": round(age, 2)})
+        if state.get("open_position") and age is None:
+            report["anomalies"].append({"type": "critical_open_position_unchecked",
+                                        "reason": "invalid_future_timestamp"})
         if state.get("open_position") and age is not None and age > 35:
             report["anomalies"].append({"type": "critical_open_position_unchecked",
                                         "minutes": round(age, 2)})
@@ -90,8 +96,8 @@ def diagnose(runs, state, now):
         report["anomalies"].append({"type": "api_error"})
     if state.get("gap_halt") or state.get("status") in ("data_gap", "gap_halt"):
         report["anomalies"].append({"type": "gap_halt_or_data_gap"})
-    if not scheduled and not runs:
-        report["anomalies"].append({"type": "history_unavailable_or_empty"})
+    if not scheduled:
+        report["anomalies"].append({"type": "history_unavailable_or_empty" if not runs else "no_matching_scheduled_runs"})
     report["diagnostic_note"] = ("Schedule gaps do not prove whether GitHub omitted triggers, "
                                  "delayed dispatch, or queued jobs. Compare API run history "
                                  "and queue delays before attributing root cause.")
@@ -116,7 +122,12 @@ def main():
             raise ValueError("Invalid GitHub workflow_runs payload")
         if not isinstance(state, dict):
             raise ValueError("Invalid state payload")
+        if runs.get("total_count", len(runs["workflow_runs"])) > len(runs["workflow_runs"]):
+            # The API response is incomplete: fail closed instead of implying full coverage.
+            print("WARNING: workflow history is paginated; only first page was inspected", file=sys.stderr)
         report = diagnose(runs["workflow_runs"], state, dt.datetime.now(UTC))
+        if runs.get("total_count", len(runs["workflow_runs"])) > len(runs["workflow_runs"]):
+            report["anomalies"].append({"type": "history_truncated", "reason": "api_total_count_exceeds_page"})
         print(json.dumps(report, indent=2, ensure_ascii=False))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"VERIFICATION_FAILED: {exc}", file=sys.stderr)
