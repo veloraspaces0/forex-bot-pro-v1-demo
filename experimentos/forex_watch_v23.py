@@ -159,6 +159,14 @@ def assess(state, runs, now):
     if state.get("status") == "api_error":
         flag("CRITICO" if position or (check_age is not None and check_age > 30) else "ATENCAO",
              "API_ERROR", "Estado público registra erro da API; causa exata requer logs.")
+    if state.get("status") == "awaiting_api_key":
+        flag("CRITICO", "API_CREDENTIAL_MISSING", "Motor PAPER informa ausência da credencial da fonte de dados.")
+    elif state.get("status") == "market_closed_or_stale" and not closed and not sunday_open_grace(now):
+        flag("CRITICO" if position else "ATENCAO", "MARKET_DATA_NOT_FRESH",
+             "Motor informou preço de mercado não atualizado durante sessão regular.")
+    elif state.get("status") not in {"monitoring", "market_closed_or_stale", "awaiting_api_key",
+                                     "api_error", "data_gap", "gap_halt"}:
+        flag("ATENCAO", "UNRECOGNIZED_BOT_STATUS", "Estado público apresenta status não reconhecido.")
     scheduled = [r for r in bot if r.get("event") == "schedule"]
     intervals = [
         round((utc(a["created_at"]) - utc(b["created_at"])).total_seconds() / 60, 1)
