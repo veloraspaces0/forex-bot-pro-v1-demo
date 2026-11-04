@@ -161,6 +161,10 @@ export function assess(state, runs, now) {
     openPosition:opened, side:opened?state.position_side:null,
     balance:state.balance, equity:state.estimated_equity,
     closedTrades:state.closed_trades, riskViolations:state.risk_violations,
+    wins:state.wins, losses:state.losses,
+    maxClosedDrawdownPct:state.max_closed_drawdown_pct,
+    lastClosedTradeKey:state.closed_results.length?
+      JSON.stringify(["at","side","pnl","reason"].map(k=>state.closed_results[0][k]??null)):null,
     checkedAt:checked, candleAt:state.last_candle_at,
     lastRunId:latest?.id || null, source:"PUBLIC_GITHUB_ONLY"};
 }
@@ -323,6 +327,23 @@ export async function assessContinuity(report,env,now=Date.now()) {
     if(previous) {
       if(Number.isInteger(previous.closedTrades) &&
          report.closedTrades < previous.closedTrades) regressed.push("closed_trades");
+      if(Number.isInteger(previous.riskViolations) &&
+         report.riskViolations < previous.riskViolations) regressed.push("risk_violations");
+      if(Number.isInteger(previous.wins) && report.wins < previous.wins)
+        regressed.push("wins");
+      if(Number.isInteger(previous.losses) && report.losses < previous.losses)
+        regressed.push("losses");
+      if(Number.isFinite(previous.maxClosedDrawdownPct) &&
+         report.maxClosedDrawdownPct+0.011 < previous.maxClosedDrawdownPct)
+        regressed.push("closed_drawdown");
+      if(previous.closedTrades===report.closedTrades) {
+        if(Number.isFinite(previous.balance) &&
+           Math.abs(report.balance-previous.balance)>0.011)
+          regressed.push("balance_changed_without_closed_trade");
+        if(previous.lastClosedTradeKey && report.lastClosedTradeKey &&
+           previous.lastClosedTradeKey!==report.lastClosedTradeKey)
+          regressed.push("last_closed_trade_rewritten");
+      }
       if(previous.candleAt && report.candleAt &&
          parseTimestamp(report.candleAt)<parseTimestamp(previous.candleAt))
         regressed.push("last_candle_at");
@@ -340,7 +361,12 @@ export async function assessContinuity(report,env,now=Date.now()) {
       // deliberately not expected to be monotonic.
       await env.INCIDENT_KV.put(baselineKey,JSON.stringify({
         checkedAt:report.checkedAt,candleAt:report.candleAt,
-        closedTrades:report.closedTrades,observedAt:now}),{expirationTtl:604800});
+        closedTrades:report.closedTrades,balance:report.balance,
+        wins:report.wins,losses:report.losses,
+        maxClosedDrawdownPct:report.maxClosedDrawdownPct,
+        riskViolations:report.riskViolations,
+        lastClosedTradeKey:report.lastClosedTradeKey,
+        observedAt:now}),{expirationTtl:604800});
     }
   } catch(error) {
     report.issues.push({severity:"ATENCAO",code:"HISTORY_CONTINUITY_UNAVAILABLE",
