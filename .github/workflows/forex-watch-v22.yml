@@ -1,0 +1,29 @@
+name: Forex Watch V2.2 - Experimento somente leitura
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - experimento-forex-watch-v22-20261104
+    paths:
+      - 'experimentos/forex_watch_v22.py'
+      - 'tests/test_forex_watch_v22.py'
+      - '.github/workflows/forex-watch-v22.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dez testes de regressao offline sem API key
+        run: python -m unittest discover -s tests -p 'test_forex_watch_v22.py' -v
+      - name: Diagnostico de somente leitura dos dados PUBLICOS da main
+        run: python experimentos/forex_watch_v22.py --json
+        continue-on-error: true
