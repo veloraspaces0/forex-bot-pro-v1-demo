@@ -308,9 +308,25 @@ def diagnose(runs, state, now):
         "gap_halt_or_data_gap", "future_run_created_at",
     }
     current_types = {item["type"] for item in report["anomalies"]}
+    # State freshness and candle completeness are prerequisites for a green result.
+    # Even if every workflow succeeded, a missing observation cannot prove health.
+    required_evidence = (
+        state.get("mode") == "PAPER_ONLY"
+        and state.get("pair") == "EUR/USD"
+        and type(state.get("open_position")) is bool
+        and type(state.get("risk_violations")) is int
+        and state.get("risk_violations") == 0
+        and type(state.get("gap_halt")) is bool
+        and state.get("gap_halt") is False
+        and report.get("state_age_minutes") is not None
+        and report.get("last_candle_age_minutes") is not None
+        and report.get("last_success_age_minutes") is not None
+        and report.get("last_run_age_minutes") is not None
+    )
+    report["required_evidence_complete"] = required_evidence
     report["operational_health"] = (
         "degraded" if current_types & critical_types else
-        "unverified" if current_types or not scheduled else "healthy"
+        "unverified" if current_types or not scheduled or not required_evidence else "healthy"
     )
     report["position_side"] = state.get("position_side") if state.get("open_position") else None
     report["balance"] = state.get("balance")
