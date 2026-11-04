@@ -666,3 +666,21 @@ test("new increments of risk_violations are not silently deduplicated",async()=>
   assert.equal((await deliver({...report,riskViolations:2},env,NOW+1000,sender)).notified,true);
   assert.equal(sends,2);
 });
+
+test("GitHub rate-limit 403 is distinguished from generic access-denied 403",async()=>{
+  const limited=async()=>new Response("rate limited",{status:403,headers:{"x-ratelimit-remaining":"0"}});
+  const out=await runCheck({},NOW,limited);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403_RATE_LIMIT"));
+});
+test("GitHub 403 never leaks token or error response body into incident",async()=>{
+  const secret="TEST_FAKE_READ_ONLY_TOKEN";
+  const denied=async(_url,options)=>{
+    assert.equal(options.headers.Authorization,"Bearer "+secret);
+    return new Response("private response "+secret,{status:403});
+  };
+  const out=await runCheck({GITHUB_READ_TOKEN:secret},NOW,denied);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403"));
+  assert.ok(!JSON.stringify(out.report).includes(secret));
+});
