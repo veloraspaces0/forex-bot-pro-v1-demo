@@ -1,0 +1,69 @@
+Deploy GitHub Pages posteriormente concluído
+Fonte: https://github.com/veloraspaces0/forex-bot-pro-v1-demo/actions/runs/41822769385
+Job ID: 126549971255
+Coletado do GitHub Actions pelo conector (texto do log da execução original).
+A publicação deste texto NÃO inclui chaves/API tokens e não equivale a fornecer o estado cifrado.
+
+----- BEGIN ORIGINAL JOB LOG -----
+﻿2026-11-04T11:40:32.2863722Z Current runner version: '2.338.2'
+2026-11-04T11:40:32.2879555Z ##[group]Runner Image Provisioner
+2026-11-04T11:40:32.2880154Z Hosted Compute Agent
+2026-11-04T11:40:32.2880505Z Version: 20261021.618
+2026-11-04T11:40:32.2880904Z Commit: 21505ad2541d5be6135ed84fc33697146cf75b8e
+2026-11-04T11:40:32.2881377Z Build Date: 2026-10-21T00:45:21Z
+2026-11-04T11:40:32.2881781Z Worker ID: {485784ee-7391-4cdb-870c-3cef709d56d7}
+2026-11-04T11:40:32.2882224Z Region: centralus
+2026-11-04T11:40:32.2882560Z Cloud: Azure
+2026-11-04T11:40:32.2883075Z ##[endgroup]
+2026-11-04T11:40:32.2884015Z ##[group]Operating System
+2026-11-04T11:40:32.2884442Z Ubuntu
+2026-11-04T11:40:32.2884823Z 26.04.1
+2026-11-04T11:40:32.2885133Z LTS
+2026-11-04T11:40:32.2885430Z ##[endgroup]
+2026-11-04T11:40:32.2885831Z ##[group]Runner Image
+2026-11-04T11:40:32.2886181Z Image: ubuntu-26.04
+2026-11-04T11:40:32.2886542Z Version: 20261025.179.1
+2026-11-04T11:40:32.2887315Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261025.179/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-04T11:40:32.2888226Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261025.179
+2026-11-04T11:40:32.2888783Z ##[endgroup]
+2026-11-04T11:40:32.2889513Z ##[group]GITHUB_TOKEN Permissions
+2026-11-04T11:40:32.2890666Z Contents: read
+2026-11-04T11:40:32.2891117Z Metadata: read
+2026-11-04T11:40:32.2891453Z Pages: write
+2026-11-04T11:40:32.2891773Z ##[endgroup]
+2026-11-04T11:40:32.2893246Z Secret source: Actions
+2026-11-04T11:40:32.2893776Z Cache mode: read
+2026-11-04T11:40:32.2894341Z Prepare workflow directory
+2026-11-04T11:40:32.3110961Z Prepare all required actions
+2026-11-04T11:40:32.3142340Z Getting action download info
+2026-11-04T11:40:32.5114822Z Download action repository 'actions/deploy-pages@v5' (SHA:368f82528645a54fb793d4d04e342629a3f51346)
+2026-11-04T11:40:33.0997569Z Complete job name: deploy
+2026-11-04T11:40:33.1547034Z ##[group]Run actions/deploy-pages@v5
+2026-11-04T11:40:33.1547471Z with:
+2026-11-04T11:40:33.1549332Z   token: ***
+2026-11-04T11:40:33.1549588Z   timeout: 600000
+2026-11-04T11:40:33.1549833Z   error_count: 10
+2026-11-04T11:40:33.1550082Z   reporting_interval: 5000
+2026-11-04T11:40:33.1550364Z   artifact_name: github-pages
+2026-11-04T11:40:33.1550641Z   preview: false
+2026-11-04T11:40:33.1550947Z ##[endgroup]
+2026-11-04T11:40:33.4619770Z (node:2029) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-11-04T11:40:33.4620790Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-11-04T11:40:33.6370950Z Fetching artifact metadata for "github-pages" in this workflow run
+2026-11-04T11:40:33.8009705Z Found 1 artifact(s)
+2026-11-04T11:40:33.8063658Z Creating Pages deployment with payload:
+2026-11-04T11:40:33.8064139Z {
+2026-11-04T11:40:33.8064479Z 	"artifact_id": 13316729735,
+2026-11-04T11:40:33.8064919Z 	"pages_build_version": "aaa71a728c4d1dee8c9aef0eb1c65ee2a85da271",
+2026-11-04T11:40:33.8087525Z 	"oidc_token": "***"
+2026-11-04T11:40:33.8087796Z }
+2026-11-04T11:40:34.3798434Z Created deployment for aaa71a728c4d1dee8c9aef0eb1c65ee2a85da271, ID: aaa71a728c4d1dee8c9aef0eb1c65ee2a85da271
+2026-11-04T11:40:38.7437774Z Getting Pages deployment status...
+2026-11-04T11:40:38.8946922Z Current status: deployment_queued
+2026-11-04T11:40:47.6215782Z Getting Pages deployment status...
+2026-11-04T11:40:47.8010135Z Reported success!
+2026-11-04T11:40:47.8291679Z Evaluate and set environment url
+2026-11-04T11:40:47.8295295Z Evaluated environment url: https://veloraspaces0.github.io/forex-bot-pro-v1-demo/
+2026-11-04T11:40:47.8296127Z Cleaning up orphan processes
+
+----- END ORIGINAL JOB LOG -----
