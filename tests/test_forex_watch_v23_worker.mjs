@@ -279,7 +279,7 @@ test("heartbeat URL must have fixed trusted origin, no tokens leaked",async()=>{
       async()=>{throw Error("Forbidden request")}),/HEARTBEAT_URL_INVALID/);
   }
 });
-test("scheduled monitor observe cycle pings success after valid GitHub data",async()=>{
+test("observe mode performs diagnostics only and NEVER asserts heartbeat",async()=>{
   const urls=[];
   const env={ALERT_MODE:"observe",MONITOR_HEARTBEAT_URL:
     "https://hc-ping.com/01234567-89ab-cdef-0123-456789abcdef"};
@@ -294,16 +294,34 @@ test("scheduled monitor observe cycle pings success after valid GitHub data",asy
   };
   const out=await scheduledCheck(env,NOW,fake);
   assert.equal(out.report.status,"OK");
+  assert.equal(urls.length,2);
+  assert.ok(urls.every(u=>!u.includes("hc-ping.com")));
+});
+test("active mode healthy monitor sends heartbeat only after GitHub check",async()=>{
+  const urls=[];
+  const env={...activeEnv(memoryKV()),MONITOR_HEARTBEAT_URL:
+    "https://hc-ping.com/01234567-89ab-cdef-0123-456789abcdef"};
+  const fake=async(url)=>{
+    const u=String(url);urls.push(u);
+    if(u.includes("hc-ping.com")) return new Response("",{status:200});
+    return new Response(JSON.stringify(u.includes("/contents/")
+      ?{encoding:"base64",content:Buffer.from(JSON.stringify(state())).toString("base64")}
+      :{workflow_runs:runs()}),{status:200});
+  };
+  const out=await scheduledCheck(env,NOW,fake);
+  assert.equal(out.report.status,"OK");
   assert.equal(urls.length,3);
-  assert.ok(urls[2].endsWith("01234567-89ab-cdef-0123-456789abcdef"));
+  assert.ok(urls[2].startsWith("https://hc-ping.com/"));
 });
 test("upstream GitHub failure sends /fail and fails scheduled invocation",async()=>{
   const urls=[];
-  const env={ALERT_MODE:"observe",MONITOR_HEARTBEAT_URL:
+  const env={...activeEnv(memoryKV()),MONITOR_HEARTBEAT_URL:
     "https://hc-ping.com/01234567-89ab-cdef-0123-456789abcdef"};
   const fake=async(url)=>{
     urls.push(String(url));
     if(String(url).includes("hc-ping.com"))return new Response("",{status:200});
+    if(String(url).includes("api.telegram.org"))
+      return new Response('{"ok":true}',{status:200});
     return new Response("",{status:403});
   };
   await assert.rejects(scheduledCheck(env,NOW,fake),/WATCH_CYCLE_FAILED/);
