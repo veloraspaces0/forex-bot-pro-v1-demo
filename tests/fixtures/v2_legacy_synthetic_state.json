@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "mode": "PAPER_ONLY",
+  "source": "Twelve Data",
+  "pair": "EUR/USD",
+  "interval": "15min",
+  "initial_balance": 100,
+  "balance": 99.5,
+  "risk_per_trade": 0.005,
+  "daily_loss_limit": 0.02,
+  "max_leverage": 20,
+  "spread": 0.00012,
+  "position": null,
+  "trades": [
+    {
+      "side": "SELL",
+      "entry_at": "2026-11-02T10:00:00Z",
+      "signal_bar": "2026-11-02T09:45:00Z",
+      "first_exit_bar": "2026-11-02T10:15:00Z",
+      "entry": 1.085,
+      "stop": 1.0865,
+      "target": 1.082,
+      "units": 333,
+      "planned_risk_usd": 0.4995,
+      "exit_at": "2026-11-02T10:45:00Z",
+      "exit": 1.0865,
+      "pnl": -0.5,
+      "reason": "STOP"
+    }
+  ],
+  "candles": [],
+  "events": [
+    {
+      "at": "2026-11-02T10:45:00Z",
+      "message": "SELL closed STOP P/L -0.50"
+    }
+  ],
+  "last_bar": "2026-11-02T11:00:00Z",
+  "last_quote": 1.085,
+  "day": "2026-11-02",
+  "day_start_equity": 100,
+  "updated_at": "2026-11-02T11:01:00Z",
+  "last_checked_at": "2026-11-02T11:01:00Z",
+  "status": "monitoring",
+  "message": "3 candles novos processados; simulação."
+}
