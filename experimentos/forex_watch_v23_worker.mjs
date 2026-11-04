@@ -120,6 +120,7 @@ export function assess(state, runs, now) {
     candleAgeMin:candleAge, marketClosedWeekend:closed, scheduleGapsMin:gaps,
     openPosition:opened, side:opened?state.position_side:null,
     balance:state.balance, equity:state.estimated_equity,
+    closedTrades:state.closed_trades, riskViolations:state.risk_violations,
     checkedAt:checked, candleAt:state.last_candle_at,
     lastRunId:latest?.id || null, source:"PUBLIC_GITHUB_ONLY"};
 }
@@ -253,17 +254,68 @@ export async function deliver(report,env,now=Date.now(),fetcher=fetch) {
   }
   // Alert FIRST; never persist "notified" if Telegram did not accept it.
   await sendTelegram(env,alertText(report),fetcher);
+  let kvWritable=true;
   try {
     await env.INCIDENT_KV.put(key,JSON.stringify({
       fingerprint,status:report.status,notifiedAt:now,
       healthySince:0,healthyCheckAt:null}),{expirationTtl:172800});
-  } catch(error) { console.error("INCIDENT_STORE_WRITE_ERROR"); }
-  return {notified:true,recovery:false,storeDegraded:!kvReadable};
+  } catch(error) {
+    kvWritable=false;
+    console.error("INCIDENT_STORE_WRITE_ERROR");
+  }
+  return {notified:true,recovery:false,storeDegraded:!kvReadable || !kvWritable};
+}
+/**
+ * Detect a public-state rollback relative to the last seen valid observation.
+ * This does NOT access encrypted state. KV is eventually consistent, so this
+ * provides a best-effort audit signal, not an atomic history guarantee.
+ * Never update the baseline with regressed data.
+ */
+export async function assessContinuity(report,env,now=Date.now()) {
+  if(env.ALERT_MODE!=="active" || report.status==="INDETERMINADO")
+    return report;
+  const baselineKey="forex-watch-v23-public-history";
+  if(!env.INCIDENT_KV) return report; // deliver() rejects incomplete active config
+  try {
+    const raw=await env.INCIDENT_KV.get(baselineKey);
+    const previous=raw?JSON.parse(raw):null;
+    const regressed=[];
+    if(previous) {
+      if(Number.isInteger(previous.closedTrades) &&
+         report.closedTrades < previous.closedTrades) regressed.push("closed_trades");
+      if(previous.candleAt && report.candleAt &&
+         parseTimestamp(report.candleAt)<parseTimestamp(previous.candleAt))
+        regressed.push("last_candle_at");
+      if(previous.checkedAt && report.checkedAt &&
+         parseTimestamp(report.checkedAt)<parseTimestamp(previous.checkedAt))
+        regressed.push("last_checked_at");
+    }
+    if(regressed.length) {
+      report.issues.push({severity:"CRITICO",code:"HISTORY_REGRESSION_SUSPECTED",
+        message:"Possível regressão do histórico público: "+regressed.join(", ")});
+      report.status="CRITICO";
+    } else if(report.checkedAt && report.candleAt &&
+              Number.isInteger(report.closedTrades)) {
+      // Only store non-regressed observations. Trade balance can change and is
+      // deliberately not expected to be monotonic.
+      await env.INCIDENT_KV.put(baselineKey,JSON.stringify({
+        checkedAt:report.checkedAt,candleAt:report.candleAt,
+        closedTrades:report.closedTrades,observedAt:now}),{expirationTtl:604800});
+    }
+  } catch(error) {
+    report.issues.push({severity:"ATENCAO",code:"HISTORY_CONTINUITY_UNAVAILABLE",
+      message:"Não foi possível confirmar continuidade do histórico público."});
+    if(report.status==="OK") report.status="ATENCAO";
+    report.continuityDegraded=true;
+    console.error("PUBLIC_HISTORY_MONITOR_UNAVAILABLE");
+  }
+  return report;
 }
 export async function runCheck(env, now=Date.now(), fetcher=fetch) {
   let report;
   try {
     report=await readPublic(now,fetcher);
+    await assessContinuity(report,env,now);
   } catch(error) {
     const code=String(error.message).includes("STATE_BASE64_OR_JSON_INVALID")?
       "STATE_BASE64_OR_JSON_INVALID":"MONITOR_UNAVAILABLE";
@@ -315,11 +367,16 @@ export async function signalHeartbeat(env,success,fetcher=fetch) {
 export async function scheduledCheck(env,now=Date.now(),fetcher=fetch) {
   let failure=null,report=null,notification=null;
   try {
+    if(!["active","observe"].includes(env.ALERT_MODE))
+      throw new Error("ALERT_MODE_INVALID");
     if(env.ALERT_MODE==="active" && !env.MONITOR_HEARTBEAT_URL)
       throw new Error("HEARTBEAT_NOT_CONFIGURED");
     const result=await runCheck(env,now,fetcher);
     report=result.report;
     notification=result.delivery;
+    if(report.continuityDegraded || notification?.storeDegraded ||
+       notification?.reason==="kv_unavailable_recovery_blocked")
+      throw new Error("MONITOR_PERSISTENCE_DEGRADED");
     if(report.status==="INDETERMINADO")
       throw new Error("MONITOR_DATA_UNAVAILABLE");
   } catch(error) {
