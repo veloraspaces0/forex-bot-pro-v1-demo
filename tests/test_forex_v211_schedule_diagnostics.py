@@ -136,5 +136,48 @@ class ScheduleDiagnosticTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 fetch_workflow_runs("https://api.github.com/repos/example/repo")
 
+
+    def test_latest_run_not_equal_last_success(self):
+        failed = run(5, "failure")
+        passed = run(50, "success")
+        result = diagnose([failed, passed], state(5), NOW)
+        types = {a["type"] for a in result["anomalies"]}
+        self.assertIn("last_success_stale", types)
+        self.assertEqual(result["last_success_age_minutes"], 50)
+
+    def test_no_successful_runs(self):
+        result = diagnose([run(5, "failure")], state(5), NOW)
+        self.assertIn("no_successful_scheduled_runs", {a["type"] for a in result["anomalies"]})
+
+    def test_duplicate_pages_deduplicated(self):
+        page = {"total_count": 150, "workflow_runs": [dict(run(i), id=i) for i in range(100)]}
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json", return_value=page):
+            result = fetch_workflow_runs("https://api.github.com/repos/example/repo", max_pages=2)
+        self.assertEqual(len(result["workflow_runs"]), 100)
+        self.assertTrue(result["history_incomplete"])
+
+    def test_invalid_pagination_limit(self):
+        with self.assertRaises(ValueError):
+            fetch_workflow_runs("https://api.github.com/repos/example/repo", max_pages=0)
+
+    def test_timezone_offsets_sorted_correctly(self):
+        newer = run(5)
+        older = run(15)
+        newer["created_at"] = "2026-11-04T18:15:00-03:00"
+        older["created_at"] = "2026-11-04T21:05:00+00:00"
+        result = diagnose([older, newer], state(5), NOW)
+        self.assertEqual(result["last_run_age_minutes"], 5)
+
+    def test_live_mode_and_risk_violation_alerts(self):
+        s = state(5)
+        s.update(mode="LIVE", pair="GBP/USD", risk_violations=1)
+        result = diagnose([run(5)], s, NOW)
+        types = {a["type"] for a in result["anomalies"]}
+        self.assertTrue({"unexpected_mode", "unexpected_pair", "risk_violations"} <= types)
+
+    def test_invalid_run_type_rejected(self):
+        with self.assertRaises(ValueError):
+            diagnose([None], state(5), NOW)
+
 if __name__ == "__main__":
     unittest.main()
