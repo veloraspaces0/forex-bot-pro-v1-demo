@@ -21,7 +21,8 @@ def stamp(age, now=NOW):
 
 def state(age=4, candle_age=20, opened=False, now=NOW, **updates):
     result = {
-        "mode": "PAPER_ONLY", "last_checked_at": stamp(age, now), "updated_at": stamp(age, now),
+        "mode": "PAPER_ONLY", "pair": "EUR/USD", "interval": "15min",
+        "risk_violations": 0, "last_checked_at": stamp(age, now), "updated_at": stamp(age, now),
         "last_candle_at": stamp(candle_age, now),
         "open_position": opened, "position_side": "SELL" if opened else None,
         "status": "monitoring", "gap_halt": False, "balance": 99.5, "estimated_equity": 99.45,
@@ -82,6 +83,18 @@ class V23(unittest.TestCase):
         out = watch.assess(state(age=40, status="api_error"), runs(), NOW)
         self.assertEqual(out["status"], "CRITICO")
         self.assertIn("API_ERROR", reasons(out))
+
+    def test_risk_violation_in_public_state_is_critical(self):
+        out = watch.assess(state(risk_violations=1), runs(), NOW)
+        self.assertEqual(out["status"], "CRITICO")
+        self.assertIn("RISK_VIOLATIONS", reasons(out))
+
+    def test_public_state_schema_requires_valid_paper_fields(self):
+        for updates in ({"mode": None}, {"pair": "GBP/USD"}, {"interval": None},
+                        {"open_position": "false"}, {"risk_violations": -1},
+                        {"balance": float("nan")}, {"closed_trades": -2}):
+            with self.subTest(updates=updates), self.assertRaises(ValueError):
+                watch.assess(state(**updates), runs(), NOW)
 
     def test_gap_halt(self):
         out = watch.assess(state(gap_halt=True), runs(), NOW)
