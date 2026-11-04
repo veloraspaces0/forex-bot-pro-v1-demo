@@ -265,11 +265,11 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
         const seconds=Number(retryAfter);
         const date=Date.parse(retryAfter);
         const wait=Number.isFinite(seconds)?seconds*1000:Number.isFinite(date)?date-Date.now():NaN;
-        if(!Number.isFinite(wait) || wait>10000) throw new Error(code);
+        if(!Number.isFinite(wait) || wait>10000) throw Object.assign(new Error(code),{retryBudgetExceeded:true});
         retryDelay=Math.max(retryDelay,Math.max(0,wait));
       } else if(remaining==="0" && reset!==null && reset!==undefined){
         const wait=Number(reset)*1000-Date.now();
-        if(!Number.isFinite(wait) || wait>10000) throw new Error(code);
+        if(!Number.isFinite(wait) || wait>10000) throw Object.assign(new Error(code),{retryBudgetExceeded:true});
         retryDelay=Math.max(retryDelay,Math.max(0,wait));
       }
       await pause(retryDelay);
@@ -278,7 +278,7 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
       const msg=String(error?.message||"");
       const code=error?.name==="AbortError"?"GITHUB_"+resource+"_TIMEOUT":
         /^GITHUB_/.test(msg)?msg:"GITHUB_"+resource+"_NETWORK_ERROR";
-      if(n===FETCH_ATTEMPTS-1 || /HTTP_(401|404)|HTTP_403(?!_RATE_LIMIT)|INVALID_JSON|RESPONSE_TOO_LARGE/.test(code))
+      if(error?.retryBudgetExceeded || n===FETCH_ATTEMPTS-1 || /HTTP_(401|404)|HTTP_403(?!_RATE_LIMIT)|INVALID_JSON|RESPONSE_TOO_LARGE/.test(code))
         throw new Error(code);
       await pause(retryDelay);
     } finally {clearTimeout(timer);}
