@@ -1,6 +1,7 @@
 import datetime as dt
 import unittest
-from experimentos.forex_v211_schedule_diagnostics import diagnose
+from unittest.mock import patch
+from experimentos.forex_v211_schedule_diagnostics import diagnose, fetch_workflow_runs
 
 UTC = dt.timezone.utc
 NOW = dt.datetime(2026, 11, 4, 21, 20, tzinfo=UTC)
@@ -81,9 +82,9 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         result = diagnose([run(5)], s, NOW)
         self.assertIn("critical_open_position_unchecked", {a["type"] for a in result["anomalies"]})
 
-    def test_truncated_history_is_reported(self):
+    def test_hundred_runs_are_not_automatically_incomplete(self):
         result = diagnose([run(i * 15 + 1) for i in range(100)], state(5), NOW)
-        self.assertIn("history_truncated", {a["type"] for a in result["anomalies"]})
+        self.assertNotIn("history_truncated", {a["type"] for a in result["anomalies"]})
 
     def test_inconsistent_run_start_is_flagged(self):
         r = run(5)
@@ -109,6 +110,31 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         r = dict(run(5), event="push")
         result = diagnose([r], state(5), NOW)
         self.assertIn("no_matching_scheduled_runs", {a["type"] for a in result["anomalies"]})
+
+
+    def test_pagination_fetches_second_page(self):
+        pages = [
+            {"total_count": 101, "workflow_runs": [run(i) for i in range(100)]},
+            {"total_count": 101, "workflow_runs": [run(101)]},
+        ]
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json", side_effect=pages) as mocked:
+            result = fetch_workflow_runs("https://api.github.com/repos/example/repo")
+        self.assertEqual(len(result["workflow_runs"]), 101)
+        self.assertFalse(result["history_incomplete"])
+        self.assertIn("page=2", mocked.call_args_list[1].args[0])
+
+    def test_pagination_limit_flags_incomplete(self):
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json",
+                   return_value={"total_count": 400, "workflow_runs": [run(i) for i in range(100)]}):
+            result = fetch_workflow_runs("https://api.github.com/repos/example/repo", max_pages=2)
+        self.assertEqual(len(result["workflow_runs"]), 200)
+        self.assertTrue(result["history_incomplete"])
+
+    def test_malformed_api_payload_rejected(self):
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json",
+                   return_value={"workflow_runs": []}):
+            with self.assertRaises(ValueError):
+                fetch_workflow_runs("https://api.github.com/repos/example/repo")
 
 if __name__ == "__main__":
     unittest.main()
