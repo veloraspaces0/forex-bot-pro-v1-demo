@@ -841,3 +841,16 @@ test("403 API rate limit exceeded body is classified as rate limit",async()=>{
   assert.equal(out.report.status,"INDETERMINADO");
   assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403_RATE_LIMIT"));
 });
+
+// Regression: reject a GitHub payload advertising excessive size without reading its body.
+test("oversized GitHub response is rejected before body read",async()=>{
+  let bodyRead=false;
+  const fake=async()=>({ok:true,status:200,
+    headers:{get:(name)=>name==="content-length"?"3000000":null},
+    text:async()=>{bodyRead=true;throw Error("body must not be read");}
+  });
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_RESPONSE_TOO_LARGE"));
+  assert.equal(bodyRead,false);
+});
