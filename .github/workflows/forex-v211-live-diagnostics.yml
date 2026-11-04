@@ -36,6 +36,8 @@ jobs:
               'recent_scheduled_runs':r.get('recent_scheduled_runs'),
               'historical_scheduled_runs':r.get('historical_scheduled_runs'),
               'max_queue_delay_minutes':r.get('max_queue_delay_minutes'),
+              'queue_delay_sample_count':r.get('queue_delay_sample_count'),
+              'queue_delay_missing_count':r.get('queue_delay_missing_count'),
               'recent_schedule_gaps':r.get('recent_schedule_gaps'),
               'max_dispatch_offset_minutes':r.get('max_dispatch_offset_minutes'),
               'max_recent_dispatch_offset_minutes':r.get('max_recent_dispatch_offset_minutes'),
