@@ -7,8 +7,10 @@ on:
     paths:
       - 'experimentos/forex_v211_schedule_diagnostics.py'
       - 'experimentos/forex_v211_contingency_advisory.py'
+      - 'experimentos/forex_v211_idempotency_plan.py'
       - 'tests/test_forex_v211_schedule_diagnostics.py'
       - 'tests/test_forex_v211_contingency_advisory.py'
+      - 'tests/test_forex_v211_idempotency_plan.py'
       - '.github/workflows/forex-v211-diagnostics-tests.yml'
   pull_request:
     branches:
@@ -16,8 +18,10 @@ on:
     paths:
       - 'experimentos/forex_v211_schedule_diagnostics.py'
       - 'experimentos/forex_v211_contingency_advisory.py'
+      - 'experimentos/forex_v211_idempotency_plan.py'
       - 'tests/test_forex_v211_schedule_diagnostics.py'
       - 'tests/test_forex_v211_contingency_advisory.py'
+      - 'tests/test_forex_v211_idempotency_plan.py'
       - '.github/workflows/forex-v211-diagnostics-tests.yml'
   workflow_dispatch:
 
@@ -37,3 +41,4 @@ jobs:
         run: |
           python -m unittest discover -s tests -p 'test_forex_v211_schedule_diagnostics.py' -v
           python -m unittest discover -s tests -p 'test_forex_v211_contingency_advisory.py' -v
+          python -m unittest discover -s tests -p 'test_forex_v211_idempotency_plan.py' -v
