@@ -124,8 +124,11 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         self.assertIn("page=2", mocked.call_args_list[1].args[0])
 
     def test_pagination_limit_flags_incomplete(self):
-        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json",
-                   return_value={"total_count": 400, "workflow_runs": [run(i) for i in range(100)]}):
+        pages = [
+            {"total_count": 400, "workflow_runs": [run(i) for i in range(100)]},
+            {"total_count": 400, "workflow_runs": [run(i) for i in range(100, 200)]},
+        ]
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json", side_effect=pages):
             result = fetch_workflow_runs("https://api.github.com/repos/example/repo", max_pages=2)
         self.assertEqual(len(result["workflow_runs"]), 200)
         self.assertTrue(result["history_incomplete"])
