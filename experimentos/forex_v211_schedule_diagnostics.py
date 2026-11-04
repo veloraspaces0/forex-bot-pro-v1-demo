@@ -134,7 +134,8 @@ def diagnose(runs, state, now):
         key=lambda r: parse_time(r["created_at"]), reverse=True,
     )
     report = {"checked_at_utc": now.isoformat(), "scheduled_runs": len(scheduled),
-              "intervals_minutes": [], "anomalies": [], "historical_anomalies": []}
+              "intervals_minutes": [], "anomalies": [], "historical_anomalies": [],
+              "recent_schedule_gaps": []}
     recent_cutoff = now - dt.timedelta(hours=2)
     report["recent_scheduled_runs"] = sum(parse_time(r["created_at"]) >= recent_cutoff for r in scheduled)
     report["historical_scheduled_runs"] = len(scheduled) - report["recent_scheduled_runs"]
@@ -144,6 +145,14 @@ def diagnose(runs, state, now):
         report["intervals_minutes"].append(gap)
         if gap > 30:
             target = "anomalies" if parse_time(a["created_at"]) >= recent_cutoff else "historical_anomalies"
+            if target == "anomalies":
+                report["recent_schedule_gaps"].append({
+                    "newer_created_at": a["created_at"],
+                    "older_created_at": b["created_at"],
+                    "gap_minutes": gap,
+                    "newer_run": a.get("html_url"),
+                    "older_run": b.get("html_url"),
+                })
             report[target].append({"type": "schedule_interval", "minutes": gap,
                                    "newer_run": a.get("html_url")})
     for r in scheduled:
