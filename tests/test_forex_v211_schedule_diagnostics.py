@@ -179,5 +179,55 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             diagnose([None], state(5), NOW)
 
+
+    def test_pagination_empty_second_page_detected(self):
+        pages = [
+            {"total_count": 150, "workflow_runs": [dict(run(i), id=i) for i in range(100)]},
+            {"total_count": 150, "workflow_runs": []},
+        ]
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json", side_effect=pages):
+            result = fetch_workflow_runs("https://api.github.com/repos/example/repo")
+        self.assertTrue(result["history_incomplete"])
+        self.assertIn("unexpected_empty_page", result["pagination_anomalies"])
+
+    def test_pagination_total_count_changed_detected(self):
+        pages = [
+            {"total_count": 150, "workflow_runs": [dict(run(i), id=i) for i in range(100)]},
+            {"total_count": 160, "workflow_runs": [dict(run(i), id=i) for i in range(100, 160)]},
+        ]
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json", side_effect=pages):
+            result = fetch_workflow_runs("https://api.github.com/repos/example/repo")
+        self.assertIn("total_count_changed", result["pagination_anomalies"])
+
+    def test_skipped_run_flagged(self):
+        result = diagnose([run(5, "skipped")], state(5), NOW)
+        self.assertIn("workflow_failure", {a["type"] for a in result["anomalies"]})
+
+    def test_unfinished_success_not_counted(self):
+        r = dict(run(5), status="in_progress")
+        result = diagnose([r], state(5), NOW)
+        self.assertIn("no_successful_scheduled_runs", {a["type"] for a in result["anomalies"]})
+
+    def test_stale_candle_detected(self):
+        s = state(5)
+        s["last_candle_at"] = (NOW - dt.timedelta(minutes=60)).isoformat()
+        result = diagnose([run(5)], s, NOW)
+        self.assertIn("candle_stale", {a["type"] for a in result["anomalies"]})
+
+    def test_missing_candle_detected(self):
+        result = diagnose([run(5)], state(5), NOW)
+        self.assertIn("missing_last_candle_timestamp", {a["type"] for a in result["anomalies"]})
+
+    def test_missing_safety_mode_and_pair(self):
+        result = diagnose([run(5)], state(5), NOW)
+        types = {a["type"] for a in result["anomalies"]}
+        self.assertTrue({"missing_mode", "missing_pair"} <= types)
+
+    def test_invalid_risk_counter_detected(self):
+        s = state(5)
+        s["risk_violations"] = -1
+        result = diagnose([run(5)], s, NOW)
+        self.assertIn("invalid_risk_violations", {a["type"] for a in result["anomalies"]})
+
 if __name__ == "__main__":
     unittest.main()
