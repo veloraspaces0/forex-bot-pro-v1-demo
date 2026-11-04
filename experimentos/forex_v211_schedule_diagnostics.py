@@ -297,6 +297,21 @@ def diagnose(runs, state, now):
     report["diagnostic_note"] = ("Schedule gaps do not prove whether GitHub omitted triggers, "
                                  "delayed dispatch, or queued jobs. Compare API run history "
                                  "and queue delays before attributing root cause.")
+    # Diagnostic execution success is not operational health.
+    # Never classify missing or stale evidence as healthy.
+    critical_types = {
+        "no_scheduled_runs_in_response", "no_valid_scheduled_runs",
+        "no_successful_scheduled_runs", "run_late", "run_missing",
+        "last_success_stale", "state_stale", "candle_stale",
+        "critical_open_position_unchecked", "schedule_interval",
+        "runner_queue_delay", "workflow_failure", "api_error",
+        "gap_halt_or_data_gap", "future_run_created_at",
+    }
+    current_types = {item["type"] for item in report["anomalies"]}
+    report["operational_health"] = (
+        "degraded" if current_types & critical_types else
+        "unverified" if current_types or not scheduled else "healthy"
+    )
     report["position_side"] = state.get("position_side") if state.get("open_position") else None
     report["balance"] = state.get("balance")
     report["estimated_equity"] = state.get("estimated_equity")
