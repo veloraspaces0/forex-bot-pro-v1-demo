@@ -527,3 +527,35 @@ test("fresh PAPER state after run is not considered skipped",()=>{
   const out=assess(state(4,20,true),rr,NOW);
   assert.ok(!codes(out).includes("SUCCESS_WITHOUT_NEW_STATE"));
 });
+
+
+test("public cash must reconcile with complete closed_results history",()=>{
+  const broken=state(4,20,false,NOW,{balance:101,
+    equity_curve:[{n:0,balance:100},{n:1,balance:101}]});
+  const out=assess(broken,runs(),NOW);
+  assert.equal(out.status,"CRITICO");
+  assert.ok(codes(out).includes("PUBLIC_HISTORY_INCONSISTENT"));
+});
+test("same count but rewritten closed trade identity is detected across observations",async()=>{
+  const store=memoryKV(),env=activeEnv(store);
+  const initial=assess(state(),runs(),NOW);
+  await assessContinuity(initial,env,NOW);
+  const later=NOW+15*60000;
+  const fake=state(4,20,false,later,{
+    closed_results:[{at:"2026-11-04T07:30:00Z",side:"SELL",pnl:-0.5,reason:"REWRITTEN"}]
+  });
+  const current=assess(fake,runs([4,19,34,49,64],later),later);
+  assert.equal(current.status,"OK","Static self-consistency cannot see historical edit alone");
+  await assessContinuity(current,env,later);
+  assert.equal(current.status,"CRITICO");
+  assert.ok(codes(current).includes("HISTORY_REGRESSION_SUSPECTED"));
+});
+test("active floating paper equity may fluctuate without closing or rewriting trades",async()=>{
+  const store=memoryKV(),env=activeEnv(store);
+  await assessContinuity(assess(state(4,20,true),runs(),NOW),env,NOW);
+  const later=NOW+15*60000;
+  const next=assess(state(4,20,true,later,{
+    estimated_equity:99.01,pnl_total:-0.99}),runs([4,19,34,49,64],later),later);
+  await assessContinuity(next,env,later);
+  assert.ok(!codes(next).includes("HISTORY_REGRESSION_SUSPECTED"));
+});
