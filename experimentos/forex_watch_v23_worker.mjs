@@ -60,12 +60,20 @@ export function assess(state, runs, now) {
   // from the encrypted state, nor attempts to reconstruct >20 closed results.
   const lastPoint=Array.isArray(state.equity_curve)
     ? state.equity_curve[state.equity_curve.length-1] : null;
+  const closedResults=Array.isArray(state.closed_results)?state.closed_results:[];
+  const cashFromShortHistory=state.closed_trades>20 || (
+    closedResults.every(t=>t && Number.isFinite(t.pnl)) &&
+    Math.abs(state.initial_balance+
+      closedResults.reduce((sum,t)=>sum+t.pnl,0)-state.balance) <
+      (0.016+closedResults.length*0.006)
+  );
   const historyCoherent =
     Number.isInteger(state.wins) && state.wins>=0 &&
     Number.isInteger(state.losses) && state.losses>=0 &&
     state.wins+state.losses===state.closed_trades &&
     Array.isArray(state.closed_results) &&
     state.closed_results.length===Math.min(20,state.closed_trades) &&
+    cashFromShortHistory &&
     Number.isFinite(state.initial_balance) &&
     Number.isFinite(state.pnl_total) &&
     lastPoint && lastPoint.n===state.closed_trades &&
