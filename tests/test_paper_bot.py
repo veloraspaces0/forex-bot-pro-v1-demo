@@ -28,7 +28,7 @@ class PaperBotTests(unittest.TestCase):
         self.assertTrue(0<=b.rsi([x['close'] for x in data])<=100)
     def test_bootstrap_no_backfill(self):
         data=bars()
-        now=b.date(data[-1]['time'])+timedelta(minutes=20)
+        now=b.date(data[-1]['time'])+timedelta(minutes=10)
         s=b.process(b.initial(),data,now)
         self.assertEqual(len(s['trades']),0)
         self.assertIsNone(s['position'])
