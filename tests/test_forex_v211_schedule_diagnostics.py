@@ -466,5 +466,20 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         self.assertEqual(result["queue_delays_minutes"], [])
         self.assertIsNone(result["max_queue_delay_minutes"])
 
+
+    def test_recent_schedule_gap_has_both_timestamps(self):
+        newest, older = run(5), run(50)
+        result = diagnose([newest, older], state(5), NOW)
+        self.assertEqual(len(result["recent_schedule_gaps"]), 1)
+        gap = result["recent_schedule_gaps"][0]
+        self.assertEqual(gap["newer_created_at"], newest["created_at"])
+        self.assertEqual(gap["older_created_at"], older["created_at"])
+        self.assertEqual(gap["gap_minutes"], 45.0)
+
+    def test_old_schedule_gap_not_in_recent_evidence(self):
+        result = diagnose([run(5), run(180), run(240)], state(5), NOW)
+        self.assertEqual(len(result["recent_schedule_gaps"]), 1)
+        self.assertEqual(result["recent_schedule_gaps"][0]["gap_minutes"], 175.0)
+
 if __name__ == "__main__":
     unittest.main()
