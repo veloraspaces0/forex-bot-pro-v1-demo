@@ -264,5 +264,27 @@ class V23Hardening(unittest.TestCase):
         self.assertEqual(len(count),2)
         self.assertEqual(sleeps,[1])
 
+class V23EngineStatuses(unittest.TestCase):
+    def test_missing_api_key_is_critical_even_with_fresh_heartbeat(self):
+        result = watch.assess(state(status="awaiting_api_key"), runs(), NOW)
+        self.assertEqual(result["status"], "CRITICO")
+        self.assertIn("API_CREDENTIAL_MISSING", reasons(result))
+
+    def test_open_position_with_stale_provider_status(self):
+        result = watch.assess(state(opened=True, status="market_closed_or_stale"), runs(), NOW)
+        self.assertEqual(result["status"], "CRITICO")
+        self.assertIn("MARKET_DATA_NOT_FRESH", reasons(result))
+
+    def test_weekend_stale_provider_status_not_an_error(self):
+        sat = datetime(2026, 11, 7, 16, tzinfo=timezone.utc)
+        result = watch.assess(state(now=sat,candle_age=1000,status="market_closed_or_stale"),
+                              runs(now=sat), sat)
+        self.assertNotIn("MARKET_DATA_NOT_FRESH", reasons(result))
+
+    def test_unknown_engine_status_not_silently_green(self):
+        result = watch.assess(state(status="internal_error"), runs(), NOW)
+        self.assertEqual(result["status"],"ATENCAO")
+        self.assertIn("UNRECOGNIZED_BOT_STATUS",reasons(result))
+
 if __name__ == "__main__":
     unittest.main()
