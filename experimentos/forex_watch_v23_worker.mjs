@@ -364,7 +364,10 @@ export async function assessContinuity(report,env,now=Date.now()) {
         message:"Possível regressão do histórico público: "+regressed.join(", ")});
       report.status="CRITICO";
     } else if(report.checkedAt && report.candleAt &&
-              Number.isInteger(report.closedTrades)) {
+              Number.isInteger(report.closedTrades) &&
+              !report.issues.some(i=>i.code==="PUBLIC_HISTORY_INCONSISTENT")) {
+      // Never poison the continuity baseline with a self-inconsistent public
+      // snapshot. The next repaired snapshot must compare to last trusted one.
       // Only store non-regressed observations. Trade balance can change and is
       // deliberately not expected to be monotonic.
       await env.INCIDENT_KV.put(baselineKey,JSON.stringify({
