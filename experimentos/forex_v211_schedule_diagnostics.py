@@ -18,6 +18,27 @@ def fetch_json(url):
     with urllib.request.urlopen(request, timeout=15) as response:
         return json.load(response)
 
+def fetch_workflow_runs(base, max_pages=5):
+    """Fetch bounded run history; fail closed if the API omits expected runs."""
+    all_runs = []
+    expected = None
+    for page in range(1, max_pages + 1):
+        payload = fetch_json(
+            f"{base}/actions/workflows/{WORKFLOW}/runs?branch=main&per_page=100&page={page}"
+        )
+        if not isinstance(payload, dict) or not isinstance(payload.get("workflow_runs"), list):
+            raise ValueError("Invalid workflow_runs API payload")
+        if not isinstance(payload.get("total_count"), int):
+            raise ValueError("Missing total_count in workflow_runs API payload")
+        if expected is None:
+            expected = payload["total_count"]
+        batch = payload["workflow_runs"]
+        all_runs.extend(batch)
+        if len(batch) < 100 or len(all_runs) >= expected:
+            break
+    return {"workflow_runs": all_runs, "total_count": expected,
+            "history_incomplete": len(all_runs) < expected}
+
 def parse_time(value):
     parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
     if parsed.tzinfo is None:
@@ -43,8 +64,6 @@ def diagnose(runs, state, now):
     )
     report = {"checked_at_utc": now.isoformat(), "scheduled_runs": len(scheduled),
               "intervals_minutes": [], "anomalies": []}
-    if len(runs) >= 100:
-        report["anomalies"].append({"type": "history_truncated", "note": "First page only; older gaps may be missing"})
     for a, b in zip(scheduled, scheduled[1:]):
         gap = round((parse_time(a["created_at"]) - parse_time(b["created_at"])).total_seconds()/60, 2)
         report["intervals_minutes"].append(gap)
@@ -115,19 +134,16 @@ def main():
     base = f"https://api.github.com/repos/{REPO}"
     try:
         runs = (json.load(open(args.runs_file, encoding="utf-8")) if args.runs_file else
-                fetch_json(f"{base}/actions/workflows/{WORKFLOW}/runs?branch=main&per_page=100"))
+                fetch_workflow_runs(base))
         state = (json.load(open(args.state_file, encoding="utf-8")) if args.state_file else
                  fetch_json(f"https://raw.githubusercontent.com/{REPO}/main/v2/state.json"))
         if not isinstance(runs, dict) or not isinstance(runs.get("workflow_runs"), list):
             raise ValueError("Invalid GitHub workflow_runs payload")
         if not isinstance(state, dict):
             raise ValueError("Invalid state payload")
-        if runs.get("total_count", len(runs["workflow_runs"])) > len(runs["workflow_runs"]):
-            # The API response is incomplete: fail closed instead of implying full coverage.
-            print("WARNING: workflow history is paginated; only first page was inspected", file=sys.stderr)
         report = diagnose(runs["workflow_runs"], state, dt.datetime.now(UTC))
-        if runs.get("total_count", len(runs["workflow_runs"])) > len(runs["workflow_runs"]):
-            report["anomalies"].append({"type": "history_truncated", "reason": "api_total_count_exceeds_page"})
+        if runs.get("history_incomplete") or runs.get("total_count", len(runs["workflow_runs"])) > len(runs["workflow_runs"]):
+            report["anomalies"].append({"type": "history_truncated", "reason": "bounded_history_limit"})
         print(json.dumps(report, indent=2, ensure_ascii=False))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"VERIFICATION_FAILED: {exc}", file=sys.stderr)
