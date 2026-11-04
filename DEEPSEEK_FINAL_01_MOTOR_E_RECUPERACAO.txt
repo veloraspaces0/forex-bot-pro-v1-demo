@@ -1,0 +1,636 @@
+FOREX BOT PRO V2.1 CONSOLIDADA — REAUDITORIA DEEPSEEK
+PARTE 1/5: MOTOR ATIVO, ESTADO CRIPTOGRAFADO E RECUPERACAO DE GAPS
+Fonte: https://github.com/veloraspaces0/forex-bot-pro-v1-demo/tree/auditoria-v2-1-consolidada-2026-11-04
+Não contém estado operacional real nem credenciais.
+
+
+=============== INÍCIO v2/paper_bot.py ===============
+#!/usr/bin/env python3
+"""EUR/USD 15-minute PAPER-ONLY monitor. Never sends brokerage orders."""
+import json
+import math
+import os
+import ssl
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+P = Path(__file__).parent / 'state.private.json'
+UTC = timezone.utc
+NY = ZoneInfo('America/New_York')
+STEP = timedelta(minutes=15)
+CLOSE_GRACE = timedelta(seconds=90)
+SPREAD = .00012              # hypothetical, constant 1.2 pips
+MAX_LEVERAGE = 20
+RISK_FRACTION = .005
+DAILY_FRACTION = .02
+RETRY_STATUS = {429, 500, 502, 503, 504}
+
+class DataFeedError(Exception):
+    """Public-safe error; never embeds URLs, credentials, or raw provider payloads."""
+
+def date(value):
+    if isinstance(value, datetime):
+        result = value
+    else:
+        result = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    return result.replace(tzinfo=UTC) if result.tzinfo is None else result.astimezone(UTC)
+
+def stamp(value):
+    return date(value).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+def initial():
+    return dict(version=2, mode='PAPER_ONLY', source='Twelve Data', pair='EUR/USD', interval='15min',
+        initial_balance=100, balance=100, risk_per_trade=RISK_FRACTION,
+        daily_loss_limit=DAILY_FRACTION, max_leverage=MAX_LEVERAGE,
+        spread=SPREAD, position=None, trades=[], candles=[], events=[],
+        last_bar=None, last_quote=None, day=None, day_start_equity=100,
+        gap_halt=False, updated_at=None, last_checked_at=None,
+        status='awaiting_api_key', message='Configure TWELVE_DATA_API_KEY no GitHub Secrets.')
+
+def validate_state(s):
+    if not isinstance(s, dict) or s.get('version') != 2 or s.get('mode') != 'PAPER_ONLY':
+        raise ValueError('Invalid paper state version/mode')
+    if not isinstance(s.get('trades'), list) or not isinstance(s.get('candles'), list):
+        raise ValueError('Invalid paper state history')
+    if not math.isfinite(s.get('balance', float('nan'))):
+        raise ValueError('Invalid paper state balance')
+    if s.get('pair') != 'EUR/USD' or s.get('interval') != '15min':
+        raise ValueError('Unexpected trading pair/interval')
+    if s.get('last_bar') is not None: date(s['last_bar'])
+    if s.get('position') is not None and not isinstance(s['position'], dict):
+        raise ValueError('Invalid paper state position')
+    s.setdefault('gap_halt', False)  # non-disruptive migration from V2
+    s.setdefault('status', 'unknown')
+    s.setdefault('message', '')
+    if not isinstance(s['gap_halt'], bool) or not isinstance(s['status'], str) or not isinstance(s['message'], str):
+        raise ValueError('Invalid paper state flags/status')
+    return s
+
+def load():
+    return validate_state(json.loads(P.read_text(encoding='utf-8'))) if P.exists() else initial()
+
+def save(s):
+    # This is temporary PRIVATE state on an ephemeral CI runner. runner.py
+    # performs the durable, atomic encrypted/public writes.
+    P.parent.mkdir(parents=True, exist_ok=True)
+    P.write_text(json.dumps(validate_state(s), indent=2, ensure_ascii=False, allow_nan=False)+'\n', encoding='utf-8')
+
+def note(s, at, message):
+    s['events'] = (s['events'] + [dict(at=at, message=message)])[-100:]
+
+def _parse_payload(payload):
+    if not isinstance(payload, dict) or not isinstance(payload.get('values'), list):
+        raise DataFeedError('provider_invalid_payload')
+    if not isinstance(payload.get('meta', {}), dict) or payload.get('meta', {}).get('symbol', 'EUR/USD') != 'EUR/USD':
+        raise DataFeedError('provider_symbol_mismatch')
+    result = {}
+    for item in payload['values']:
+        try:
+            when = date(item['datetime'])
+            if when.second or when.microsecond or when.minute % 15:
+                raise ValueError('unaligned timestamp')
+            ts = stamp(when)
+            p = {k: float(item[k]) for k in ('open', 'high', 'low', 'close')}
+            if not all(math.isfinite(n) and .1 <= n <= 10 for n in p.values()):
+                raise ValueError('invalid price')
+            if p['high'] < max(p['open'], p['close']) or p['low'] > min(p['open'], p['close']):
+                raise ValueError('invalid candle range')
+            candle = dict(time=ts, **p)
+            if ts in result and result[ts] != candle:
+                raise ValueError('conflicting duplicate timestamp')
+            result[ts] = candle
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            raise DataFeedError('provider_invalid_candle') from None
+    if len(result) < 40:
+        raise DataFeedError('provider_insufficient_history')
+    return [result[k] for k in sorted(result)]
+
+def api(key, retries=3, sleep=time.sleep):
+    if not isinstance(retries, int) or retries < 1:
+        raise ValueError('retries must be a positive integer')
+    if not key:
+        raise DataFeedError('provider_key_missing')
+    query = urllib.parse.urlencode(dict(symbol='EUR/USD', interval='15min', timezone='UTC',
+                                        outputsize='260', apikey=key))
+    url = 'https://api.twelvedata.com/time_series?' + query
+    req = urllib.request.Request(url, headers={'User-Agent': 'ForexBotProV2-paper'})
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(req, timeout=25) as response:
+                payload = json.loads(response.read(1_000_000))
+            if isinstance(payload, dict) and payload.get('status') == 'error':
+                try:
+                    provider_code = int(payload.get('code'))
+                except (ValueError, TypeError):
+                    provider_code = 0
+                if provider_code in RETRY_STATUS or provider_code >= 500:
+                    if attempt == retries - 1:
+                        raise DataFeedError('provider_status_' + str(provider_code))
+                    sleep(min(8, 2 ** (attempt + 1)))
+                    continue
+                raise DataFeedError('provider_status_' + str(provider_code))
+            return _parse_payload(payload)
+        except urllib.error.HTTPError as exc:
+            err = 'provider_http_' + str(exc.code)
+            transient = exc.code in RETRY_STATUS
+        except (urllib.error.URLError, ssl.SSLError, TimeoutError, ConnectionError) as exc:
+            err, transient = 'provider_network_error', True
+        except (ValueError, UnicodeError) as exc:
+            # Malformed JSON is treated as transient but never used as market data.
+            err, transient = 'provider_invalid_json', True
+        if not transient or attempt == retries - 1:
+            raise DataFeedError(err) from None
+        sleep(min(8, 2 ** (attempt + 1)))
+    raise DataFeedError('provider_unavailable')
+
+def ema(vals, n):
+    if len(vals) < n: return None
+    result = sum(vals[:n]) / n
+    for price in vals[n:]: result = price * (2/(n+1)) + result * (1 - 2/(n+1))
+    return result
+
+def rsi(vals):
+    if len(vals) < 15: return None
+    changes = [vals[i]-vals[i-1] for i in range(len(vals)-14, len(vals))]
+    up = sum(max(0, x) for x in changes)
+    down = sum(max(0, -x) for x in changes)
+    return (100 if up else 50) if down == 0 else 100-100/(1+up/down)
+
+def atr(bars):
+    if len(bars) < 15: return None
+    ranges = []
+    for i in range(len(bars)-14, len(bars)):
+        bar, prev = bars[i], bars[i-1]['close']
+        ranges.append(max(bar['high']-bar['low'], abs(bar['high']-prev), abs(bar['low']-prev)))
+    return sum(ranges)/len(ranges)
+
+def equity(s, mid=None):
+    position = s['position']
+    value = s['balance']
+    if position and (mid is not None or s.get('last_quote') is not None):
+        quote = mid if mid is not None else s['last_quote']
+        fill = quote-SPREAD/2 if position['side']=='BUY' else quote+SPREAD/2
+        value += (fill-position['entry'])*position['units']*(1 if position['side']=='BUY' else -1)
+    return value
+
+def close(s, bar, fill, reason):
+    pos = s['position']
+    pnl = (fill-pos['entry'])*pos['units']*(1 if pos['side']=='BUY' else -1)
+    s['balance'] = round(s['balance']+pnl, 6)
+    s['trades'] = (s['trades']+[dict(**pos, exit_at=bar['time'], exit=round(fill,6),
+                                       pnl=round(pnl,6), reason=reason)])[-2000:]
+    s['position'] = None
+    if pnl < -pos.get('planned_risk_usd', 0) - .000001:
+        note(s, bar['time'], 'RISK_EXCEEDED: modeled loss above planned risk')
+    note(s, bar['time'], pos['side']+' closed '+reason+' P/L '+format(pnl,'+.2f'))
+
+def check_exit(s, bar):
+    pos = s['position']
+    if not pos or bar['time'] < pos['first_exit_bar']: return
+    if pos['side'] == 'BUY':
+        opening = bar['open']-SPREAD/2
+        if bar['low']-SPREAD/2 <= pos['stop']:
+            close(s, bar, min(opening, pos['stop']), 'STOP')
+        elif bar['high']-SPREAD/2 >= pos['target']:
+            close(s, bar, max(opening, pos['target']), 'TAKE_PROFIT')
+    else:
+        opening = bar['open']+SPREAD/2
+        if bar['high']+SPREAD/2 >= pos['stop']:
+            close(s, bar, max(opening, pos['stop']), 'STOP')
+        elif bar['low']+SPREAD/2 <= pos['target']:
+            close(s, bar, min(opening, pos['target']), 'TAKE_PROFIT')
+
+def signal(bars):
+    if len(bars) < 35: return None
+    closes = [bar['close'] for bar in bars]
+    fast, slow = ema(closes,9), ema(closes,21)
+    prev_fast, prev_slow = ema(closes[:-1],9), ema(closes[:-1],21)
+    momentum = rsi(closes)
+    if prev_fast <= prev_slow and fast > slow and 45 <= momentum <= 75: return 'BUY'
+    if prev_fast >= prev_slow and fast < slow and 25 <= momentum <= 55: return 'SELL'
+    return None
+
+def enter(s, side, quote, clock):
+    if s.get('gap_halt'):
+        note(s,stamp(clock),'ENTRY_BLOCKED_BY_GAP_HALT')
+        return
+    if s['position'] is not None or side not in ('BUY','SELL'): return
+    volatility = atr(s['candles'])
+    available = min(s['balance'], equity(s, quote))
+    if not volatility or not math.isfinite(quote) or quote <= 0 or available <= 0: return
+    distance = max(volatility * 1.5, .00035)
+    entry = quote + (SPREAD/2 if side=='BUY' else -SPREAD/2)
+    budget = max(available,0)*RISK_FRACTION
+    units = math.floor(min(budget/distance, max(0,equity(s,quote))*MAX_LEVERAGE/entry))
+    if units < 1: return
+    stop = entry+(-distance if side=='BUY' else distance)
+    target = entry+(2*distance if side=='BUY' else -2*distance)
+    clock = date(clock)
+    start = clock.replace(minute=clock.minute//15*15,second=0,microsecond=0) + STEP
+    # Conservative even at the exact bar boundary: never inspect an opening bar's full OHLC.
+    s['position'] = dict(side=side, entry_at=stamp(clock),signal_bar=s['last_bar'],
+        first_exit_bar=stamp(start), entry=round(entry,6),stop=round(stop,6),
+        target=round(target,6),units=units,planned_risk_usd=round(units*distance,4))
+    note(s,stamp(clock),side+' simulated '+str(units)+' EUR, approx risk $'+format(units*distance,'.2f'))
+
+def _market_expected(bar_time):
+    """Conservative 24x5 session: Sunday 17:00 to Friday 17:00 New York time."""
+    ny = date(bar_time).astimezone(NY)
+    day = ny.weekday()
+    return (day < 4 or (day == 4 and ny.hour < 17)
+            or (day == 6 and ny.hour >= 17))
+
+def missing_trading_bar(previous, current):
+    expected = date(previous)+STEP
+    target = date(current)
+    checks = 0
+    while expected < target:
+        checks += 1
+        if checks > 3000: return True
+        if _market_expected(expected): return True
+        expected += STEP
+    return False
+
+def process(s, bars, now):
+    now = date(now)
+    if not bars: raise DataFeedError('no_candles')
+    if any(date(bars[i]['time']) > date(bars[i+1]['time']) for i in range(len(bars)-1)):
+        raise DataFeedError('out_of_order_candles')
+    closed = [bar for bar in bars if date(bar['time'])+STEP+CLOSE_GRACE <= now]
+    if not closed: raise DataFeedError('no_completed_candles')
+    last, quoted = closed[-1], bars[-1]
+    current_start = now.replace(minute=now.minute//15*15,second=0,microsecond=0)
+    # Estimate a paper fill only from the current (possibly still-forming) bar,
+    # never from a previous candle falsely interpreted as a live quote.
+    fresh = date(quoted['time']) == current_start and date(quoted['time']) >= date(last['time'])+STEP
+    s['last_checked_at'] = stamp(now)
+    s['last_quote'] = quoted['close']
+    s['quote_at'] = quoted['time']
+    previous = s['last_bar']
+    if s.get('gap_halt'):
+        s['status'] = 'data_gap'
+        s['message'] = 'Trading halted: historical gap requires manual review.'
+        s['updated_at'] = stamp(now)
+        return s
+    if previous is None:
+        history = closed[-220:]
+        if any(missing_trading_bar(a['time'], z['time']) for a,z in zip(history,history[1:])):
+            s['gap_halt'] = True
+            s['status'] = 'data_gap'
+            s['message'] = 'Initial historical candles contain a trading-session gap; manual review required.'
+            note(s, stamp(now), 'DATA GAP during initialization: trading halted')
+            s['updated_at'] = stamp(now)
+            return s
+        s['candles'] = history
+        s['last_bar'] = last['time']
+        note(s, stamp(now), 'Initialized indicators; no historical trades.')
+        s['message'] = 'Histórico inicial carregado. Aguardando próximo candle.'
+    else:
+        new = [bar for bar in closed if bar['time'] > previous]
+        before = previous
+        for bar in new:
+            if missing_trading_bar(before, bar['time']):
+                s['gap_halt'] = True
+                s['status'] = 'data_gap'
+                s['message'] = 'Missing completed 15min candle during trading hours; manual review required.'
+                note(s, stamp(now), 'DATA GAP: trading halted')
+                s['updated_at'] = stamp(now)
+                return s  # Never partially apply the batch.
+            before = bar['time']
+        for bar in new:
+            if s['day'] != bar['time'][:10]:
+                s['day'] = bar['time'][:10]  # explicitly UTC, unchanged from V2
+                s['day_start_equity'] = equity(s,bar['open'])
+            check_exit(s,bar)
+            s['candles'] = (s['candles']+[bar])[-220:]
+            s['last_bar'] = bar['time']
+        if new and s['position'] is None and fresh:
+            age = (now-date(new[-1]['time'])-STEP).total_seconds()
+            allowed = 0 <= age <= 1800 and equity(s,quoted['close']) > 0
+            allowed = allowed and equity(s,quoted['close']) > s['day_start_equity']*(1-DAILY_FRACTION)
+            if allowed:
+                side = signal(s['candles'])
+                if side: enter(s,side,quoted['close'],now)
+        s['message'] = str(len(new))+' candles novos processados; simulação.'
+    if not s['day']:
+        s['day'] = last['time'][:10]
+        s['day_start_equity'] = s['balance']
+    s['status'] = 'monitoring' if fresh else 'market_closed_or_stale'
+    s['updated_at'] = stamp(now)
+    return s
+
+def main():
+    state = load()  # Invalid/corrupted state must fail closed; never reset it.
+    key = os.getenv('TWELVE_DATA_API_KEY','').strip()
+    if not key:
+        state['status'] = 'data_gap' if state.get('gap_halt') else 'awaiting_api_key'
+        state['message'] = 'Configure TWELVE_DATA_API_KEY no GitHub Secrets.'
+        state['last_checked_at'] = stamp(datetime.now(UTC))
+        state['updated_at'] = state['last_checked_at']
+        save(state)
+        print('API key missing; no paper operations.')
+        return
+    try:
+        process(state,api(key),datetime.now(UTC))
+    except DataFeedError as exc:
+        state['status'] = 'data_gap' if state.get('gap_halt') else 'api_error'
+        state['message'] = 'Data feed: '+str(exc)[:90]  # sanitized error codes only
+        state['last_checked_at'] = stamp(datetime.now(UTC))
+        state['updated_at'] = state['last_checked_at']
+        note(state,state['last_checked_at'],'Data error, no new paper trade')
+        save(state)
+        print(state['message'])
+        return
+    save(state)
+    print('V2.1',state['status'],'closed_trades',len(state['trades']),'balance',state['balance'])
+
+if __name__ == '__main__': main()
+
+=============== FIM v2/paper_bot.py ===============
+
+
+=============== INÍCIO v2/runner.py ===============
+#!/usr/bin/env python3
+"""Encrypted paper-only state runner. Public output is derived metrics only."""
+import base64
+import hashlib
+import json
+import os
+import tempfile
+from pathlib import Path
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+import paper_bot as bot
+
+ROOT = Path(__file__).parent
+ENC = ROOT / 'state.enc'
+PUB = ROOT / 'state.json'
+AAD = b'forex-bot-pro-v2-paper-only'
+HEADER = b'FX2'
+
+# Do not change existing key derivation: already-encrypted V2 state must
+# remain decryptable. A future key rotation requires an explicit migration.
+def cipher(key_text):
+    secret = os.getenv('V2_STATE_ENCRYPTION_KEY','').strip() or key_text
+    key = hashlib.pbkdf2_hmac('sha256',secret.encode('utf-8'),b'fxbot-v2-v1',180000,32)
+    return AESGCM(key)
+
+def decrypt(key, path=None):
+    raw = base64.b64decode((Path(path) if path is not None else ENC).read_bytes().strip(),validate=True)
+    if raw[:3] != HEADER or len(raw)<32: raise ValueError('Invalid encrypted state header')
+    plain = cipher(key).decrypt(raw[3:15],raw[15:],AAD)
+    bot.validate_state(json.loads(plain))  # wrong-key / corruption fails closed
+    return plain
+
+def atomic_write(path, content):
+    """Temp file+fsync+replace on same filesystem; never expose partial state."""
+    path.parent.mkdir(parents=True,exist_ok=True)
+    name = None
+    try:
+        with tempfile.NamedTemporaryFile(mode='wb',prefix='.forex-state-',suffix='.tmp',
+                                         dir=path.parent,delete=False) as temporary:
+            name = temporary.name
+            os.chmod(name,0o600)
+            temporary.write(content)
+            temporary.flush()
+            os.fsync(temporary.fileno())
+        os.replace(name,path)
+        name = None
+        try:
+            fd = os.open(str(path.parent),os.O_RDONLY)
+            try: os.fsync(fd)
+            finally: os.close(fd)
+        except OSError:
+            pass  # Filesystem may not support directory fsync.
+    finally:
+        if name is not None:
+            Path(name).unlink(missing_ok=True)
+
+def encrypt(key, plaintext, path=None):
+    bot.validate_state(json.loads(plaintext))
+    nonce = os.urandom(12)
+    sealed = HEADER+nonce+cipher(key).encrypt(nonce,plaintext,AAD)
+    atomic_write(Path(path) if path is not None else ENC,base64.b64encode(sealed)+b'\n')
+
+def summary(s):
+    bot.validate_state(s)
+    trades=s['trades']
+    wins=sum(t['pnl']>0 for t in trades)
+    curve=[dict(n=0,balance=round(s['initial_balance'],2))]
+    cash=s['initial_balance'];peak=cash;max_dd=0
+    for i,t in enumerate(trades,1):
+        cash+=t['pnl'];peak=max(peak,cash)
+        if peak>0:max_dd=max(max_dd,(peak-cash)/peak*100)
+        if i>len(trades)-120:
+            curve.append(dict(n=i,balance=round(cash,2)))
+    if len(trades)>120:
+        curve.insert(0,dict(n=len(trades)-120,
+            balance=round(s['initial_balance']+sum(t['pnl'] for t in trades[:-120]),2)))
+    e=round(bot.equity(s),2)
+    risk_violations=sum(t['pnl'] < -t.get('planned_risk_usd',float('inf'))-.000001 for t in trades)
+    return dict(version=2,mode='PAPER_ONLY',source='Twelve Data',pair='EUR/USD',interval='15min',
+        initial_balance=s['initial_balance'],balance=round(s['balance'],2),
+        estimated_equity=e,pnl_total=round(e-s['initial_balance'],2),
+        closed_trades=len(trades),wins=wins,losses=len(trades)-wins,
+        win_rate_pct=round(100*wins/len(trades),1) if trades else 0,
+        max_closed_drawdown_pct=round(max_dd,2),max_risk_pct=.5,daily_loss_limit_pct=2,
+        risk_violations=risk_violations,gap_halt=bool(s.get('gap_halt')),
+        open_position=bool(s['position']),position_side=s['position']['side'] if s['position'] else None,
+        status=s['status'],message=s['message'],updated_at=s.get('updated_at'),
+        last_checked_at=s.get('last_checked_at'),last_candle_at=s.get('last_bar'),
+        equity_curve=curve,
+        closed_results=[dict(at=t['exit_at'],side=t['side'],pnl=round(t['pnl'],2),reason=t['reason'],
+            planned_risk_usd=round(t['planned_risk_usd'],4) if t.get('planned_risk_usd') is not None else None,
+            risk_exceeded=(t['pnl'] < -t['planned_risk_usd']-.000001) if t.get('planned_risk_usd') is not None else None)
+                        for t in trades[-20:]][::-1],
+        events=s['events'][-12:][::-1],
+        notice='Paper estimates only. Gaps and variable costs may exceed planned risk; no real orders.')
+
+def write_public(s):
+    data=json.dumps(summary(s),ensure_ascii=False,indent=2,allow_nan=False)+'\n'
+    atomic_write(PUB,data.encode('utf-8'))
+
+def main():
+    key = os.getenv('TWELVE_DATA_API_KEY','').strip()
+    if not key:
+        print('Missing API credential; no paper operations.')
+        if not PUB.exists(): write_public(bot.initial())
+        return
+    try:
+        if ENC.exists():
+            data=decrypt(key)
+        else:
+            # Bootstrapping is only allowed if there is no existing public
+            # operational state, otherwise a missing ENC is a possible data loss.
+            if PUB.exists():
+                old=json.loads(PUB.read_text(encoding='utf-8'))
+                if old.get('closed_trades',0) or old.get('open_position') or old.get('last_candle_at'):
+                    raise RuntimeError('Encrypted state missing; refusing to reset paper history')
+            data=json.dumps(bot.initial()).encode('utf-8')
+        atomic_write(bot.P,data)
+        bot.main()
+        updated=bot.P.read_bytes()
+        updated_state=bot.validate_state(json.loads(updated))
+        # The encrypted blob is authoritative. A later public write failure
+        # is repaired by publishing from ENC on the next successful run.
+        encrypt(key,updated)
+        write_public(updated_state)
+        print('Only encrypted state and derived public summary persisted.')
+    finally:
+        bot.P.unlink(missing_ok=True)
+
+if __name__=='__main__': main()
+
+=============== FIM v2/runner.py ===============
+
+
+=============== INÍCIO v2/recover_gap.py ===============
+#!/usr/bin/env python3
+"""Manual, offline, fail-closed gap recovery for PAPER-ONLY encrypted state.
+
+This tool DOES NOT fetch quotes, place orders or push to GitHub. It skips an
+unverifiable simulation interval only after an explicit, documented review.
+Never use it when a paper position was open across the missing interval.
+"""
+import argparse
+import json
+import os
+from datetime import datetime, timedelta
+from pathlib import Path
+
+import paper_bot as bot
+import runner
+
+MIN_CONTIGUOUS = 40
+MAX_CLOSED_AGE = timedelta(minutes=45)
+
+
+def propose_recovery(state, provider_payload, now, reason):
+    """Pure transformation; no changes to secrets/files or historical trades."""
+    now = bot.date(now)
+    if not isinstance(reason, str) or not (8 <= len(reason.strip()) <= 160):
+        raise ValueError('Review reason must be between 8 and 160 characters')
+    s = bot.validate_state(json.loads(json.dumps(state)))  # deep copy and validate
+    if not s['gap_halt']:
+        raise ValueError('State is not halted; recovery not permitted')
+    if s['position'] is not None:
+        raise ValueError('Open paper position: manual reconciliation required; recovery denied')
+    bars = bot._parse_payload(provider_payload)  # validates price, market, UTC alignment
+    closed = [bar for bar in bars if bot.date(bar['time'])+bot.STEP+bot.CLOSE_GRACE <= now]
+    if len(closed) < MIN_CONTIGUOUS:
+        raise ValueError('Not enough verified completed candles to recover')
+    tail = closed[-MIN_CONTIGUOUS:]
+    for a,z in zip(tail,tail[1:]):
+        if bot.date(z['time'])-bot.date(a['time']) != bot.STEP:
+            raise ValueError('The final 40 completed candles are not strictly contiguous')
+    previous = s.get('last_bar')
+    if previous is not None and bot.date(tail[-1]['time']) <= bot.date(previous):
+        raise ValueError('No newer completed candle after the halted state')
+    age = now - (bot.date(tail[-1]['time'])+bot.STEP)
+    if age < bot.CLOSE_GRACE or age > MAX_CLOSED_AGE:
+        raise ValueError('Reviewed snapshot is outside the permitted freshness window')
+    original_trades = len(s['trades'])
+    original_balance = s['balance']
+    new_day = tail[-1]['time'][:10]
+    if s.get('day') != new_day:
+        s['day'] = new_day
+        s['day_start_equity'] = s['balance']  # flat; document UTC day reference change
+    s['candles'] = tail
+    s['last_bar'] = tail[-1]['time']  # only FUTURE candles can create new simulated trades
+    s['last_quote'] = None
+    s['quote_at'] = None
+    s['gap_halt'] = False
+    s['status'] = 'recovery_paused'
+    s['message'] = 'Reviewed gap intentionally skipped; awaiting a NEW closed candle. No historical trades simulated.'
+    s['updated_at'] = bot.stamp(now)
+    s['last_checked_at'] = bot.stamp(now)
+    s['recovery_count'] = int(s.get('recovery_count',0)) + 1
+    s['last_recovery_at'] = bot.stamp(now)
+    bot.note(s, bot.stamp(now), 'RECOVERY_GAP_SKIPPED: '+reason.strip()+'; prior_bar='+str(previous)+'; resumed_from='+s['last_bar']+'; no backfill')
+    bot.validate_state(s)
+    if len(s['trades']) != original_trades or s['balance'] != original_balance:
+        raise AssertionError('Recovery unexpectedly changed trades or balance')
+    return s
+
+
+def backup_bytes_exclusive(target, raw):
+    """Do not clobber another backup; mode 0600 from creation."""
+    target = Path(target)
+    target.parent.mkdir(parents=True,exist_ok=True)
+    fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(fd,'wb') as stream:
+        stream.write(raw)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description='Offline recovery of a paused FOREX paper state; DRY-RUN by default.')
+    parser.add_argument('--state',type=Path,required=True,help='Local copy of encrypted state.enc (never commit)')
+    parser.add_argument('--snapshot',type=Path,required=True,help='Manually reviewed Twelve Data time_series JSON')
+    parser.add_argument('--reason',required=True,help='Why skipping the unavailable simulated interval was approved')
+    parser.add_argument('--apply',action='store_true',help='Actually modify the local encrypted state')
+    parser.add_argument('--acknowledge-skipped-paper-trades',action='store_true',help='Explicitly accept no reconstructed trades in the gap')
+    parser.add_argument('--backup',type=Path,help='New backup file OUTSIDE the repository, required with --apply')
+    parser.add_argument('--public',type=Path,help='Optional local derived summary; never upload raw quotes')
+    args = parser.parse_args(argv)
+    if args.apply:
+        repository = Path(__file__).resolve().parents[1]
+        if args.state.resolve().is_relative_to(repository):
+            parser.error('Recover only an offline STATE COPY outside the repository')
+        if args.snapshot.resolve().is_relative_to(repository):
+            parser.error('Keep raw quote snapshots OUTSIDE the repository')
+        if args.public and args.public.resolve().is_relative_to(repository):
+            parser.error('Write local summary OUTSIDE the repository')
+        if not args.acknowledge_skipped_paper_trades or args.backup is None:
+            parser.error('--apply requires --acknowledge-skipped-paper-trades and --backup')
+        if args.backup.resolve() == args.state.resolve():
+            parser.error('Backup must not overwrite source state')
+        if args.backup.resolve().is_relative_to(Path(__file__).resolve().parents[1]):
+            parser.error('Backup must be outside the repository')
+        if args.backup.exists():
+            parser.error('Backup already exists; refusing to overwrite')
+    key = os.getenv('TWELVE_DATA_API_KEY','').strip()
+    dedicated = os.getenv('V2_STATE_ENCRYPTION_KEY','').strip()
+    if not key and not dedicated:
+        parser.error('Provide existing encryption secret via environment (never CLI arguments)')
+    raw = args.state.read_bytes()
+    state = json.loads(runner.decrypt(key,path=args.state))
+    snapshot = json.loads(args.snapshot.read_text(encoding='utf-8'))
+    repaired = propose_recovery(state,snapshot,datetime.now(bot.UTC),args.reason)
+    print('REVIEW ONLY: old last_bar='+str(state.get('last_bar'))+', new last_bar='+str(repaired['last_bar']))
+    print('Trades and balance preserved. Open positions are NOT recoverable by this tool.')
+    if not args.apply:
+        print('DRY RUN: no files were modified; add --apply and explicit acknowledgement after independent review.')
+        return 0
+    if args.state.read_bytes() != raw:
+        raise RuntimeError('State changed during review; refusing to overwrite')
+    backup_bytes_exclusive(args.backup,raw)
+    runner.encrypt(key,json.dumps(repaired,ensure_ascii=False,allow_nan=False).encode('utf-8'),path=args.state)
+    if args.public:
+        runner.atomic_write(args.public,(json.dumps(runner.summary(repaired),ensure_ascii=False,indent=2,allow_nan=False)+'\n').encode('utf-8'))
+    print('Applied to LOCAL COPY. Backup preserved. DO NOT push to main while Actions is active.')
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
+
+=============== FIM v2/recover_gap.py ===============
+
+
+=============== INÍCIO v2/run.py ===============
+"""Compatibilidade: redireciona a execução V2 para o runner com dados criptografados.
+
+Nao salva candles ou operacoes brutas em JSON publico.
+"""
+from runner import main
+
+if __name__ == "__main__":
+    main()
+
+=============== FIM v2/run.py ===============
