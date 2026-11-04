@@ -756,3 +756,39 @@ test("state REST 429 falls back to raw content",async()=>{
   const out=await readPublic(NOW,fake);
   assert.equal(out.status,"OK");
 });
+
+/**
+ * Fifty deterministic adversarial HTTP 403 regression cases.
+ * Each is an independent isolated test case, NOT 50 real Cloudflare deployments.
+ */
+for(let caseNo=0;caseNo<50;caseNo++){
+  test("HTTP 403 adversarial matrix #"+String(caseNo+1).padStart(2,"0"),async()=>{
+    const token=caseNo%2?"TEST_ONLY_FAKE_TOKEN":null;
+    const stateDenied=caseNo%5!==0;
+    const rawOk=caseNo%3!==0;
+    const runsDenied=caseNo%7===0;
+    const seen=[];
+    const fake=async(url,opts={})=>{
+      const u=String(url);
+      seen.push({u,auth:opts.headers?.Authorization});
+      if(u.includes("/contents/") && stateDenied)
+        return new Response("forbidden",{status:403});
+      if(u.startsWith("https://raw.githubusercontent.com/"))
+        return rawOk?new Response(JSON.stringify(state()),{status:200})
+          :new Response("forbidden",{status:403});
+      if(u.includes("/actions/") && runsDenied)
+        return new Response("forbidden",{status:403});
+      return new Response(JSON.stringify(u.includes("/actions/")
+        ?{workflow_runs:runs()}
+        :{encoding:"base64",content:Buffer.from(JSON.stringify(state())).toString("base64")}),
+        {status:200});
+    };
+    const out=await runCheck(token?{GITHUB_READ_TOKEN:token}:{},NOW,fake);
+    const expectedOk=(!stateDenied||rawOk)&&!runsDenied;
+    assert.equal(out.report.status,expectedOk?"OK":"INDETERMINADO");
+    assert.ok(seen.filter(x=>x.u.startsWith("https://raw.githubusercontent.com/"))
+      .every(x=>!x.auth));
+    assert.ok(!JSON.stringify(out).includes("TEST_ONLY_FAKE_TOKEN"));
+    if(stateDenied) assert.ok(seen.some(x=>x.u.startsWith("https://raw.githubusercontent.com/")));
+  });
+}
