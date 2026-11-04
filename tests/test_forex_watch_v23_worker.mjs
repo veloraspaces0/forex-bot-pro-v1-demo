@@ -885,3 +885,22 @@ test("raw fallback rejects oversized streamed JSON without Content-Length",async
   assert.equal(rawCancelled,true);
   assert.ok(rawReads<=3);
 });
+
+test("rate limit reset beyond retry budget never retries REST state",async()=>{
+  let stateCalls=0;
+  const fake=async url=>{
+    if(String(url).includes("/contents/")){
+      stateCalls++;
+      return new Response("rate limited",{status:403,headers:{
+        "x-ratelimit-remaining":"0",
+        "x-ratelimit-reset":String(Math.floor(Date.now()/1000)+3600)
+      }});
+    }
+    if(String(url).startsWith("https://raw.githubusercontent.com/"))
+      return new Response(JSON.stringify(state()),{status:200});
+    return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+  };
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"OK");
+  assert.equal(stateCalls,1,"must not retry before GitHub rate-limit reset");
+});
