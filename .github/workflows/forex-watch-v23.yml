@@ -47,7 +47,7 @@ jobs:
         run: |
           for i in $(seq 1 50); do
             echo "HTTP 403 regression cycle $i/50"
-            node --test --test-name-pattern='HTTP 403 adversarial matrix' tests/test_forex_watch_v23_worker.mjs > /tmp/watch-403-cycle.log 2>&1 || { cat /tmp/watch-403-cycle.log; exit 1; }
+            node --test --test-name-pattern='HTTP 403 adversarial matrix|403 API rate limit exceeded body' tests/test_forex_watch_v23_worker.mjs > /tmp/watch-403-cycle.log 2>&1 || { cat /tmp/watch-403-cycle.log; exit 1; }
           done
       - name: Cloudflare Wrangler v4 bundle validation (DRY RUN — no deploy)
         run: npx --yes wrangler@4.157.0 deploy --dry-run --config experimentos/wrangler_v23.toml
