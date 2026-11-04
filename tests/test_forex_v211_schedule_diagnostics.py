@@ -229,5 +229,63 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         result = diagnose([run(5)], s, NOW)
         self.assertIn("invalid_risk_violations", {a["type"] for a in result["anomalies"]})
 
+
+    def test_invalid_run_id_rejected(self):
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json",
+                   return_value={"total_count": 1, "workflow_runs": [dict(run(5), id=-1)]}):
+            with self.assertRaises(ValueError):
+                fetch_workflow_runs("https://api.github.com/repos/example/repo")
+
+    def test_more_unique_runs_than_total_detected(self):
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json",
+                   return_value={"total_count": 1, "workflow_runs": [dict(run(5), id=1), dict(run(6), id=2)]}):
+            result = fetch_workflow_runs("https://api.github.com/repos/example/repo")
+        self.assertIn("more_unique_runs_than_total_count", result["pagination_anomalies"])
+
+    def test_numeric_position_flag_invalid(self):
+        s = state(5)
+        s["open_position"] = 1
+        types = {a["type"] for a in diagnose([run(5)], s, NOW)["anomalies"]}
+        self.assertIn("invalid_open_position_flag", types)
+        self.assertIn("position_state_unknown", types)
+
+    def test_inconsistent_success_status(self):
+        r = dict(run(5), status="queued")
+        types = {a["type"] for a in diagnose([r], state(5), NOW)["anomalies"]}
+        self.assertIn("inconsistent_run_status", types)
+
+    def test_completed_without_conclusion(self):
+        r = dict(run(5), status="completed", conclusion=None)
+        types = {a["type"] for a in diagnose([r], state(5), NOW)["anomalies"]}
+        self.assertIn("missing_run_conclusion", types)
+
+    def test_missing_risk_counter(self):
+        types = {a["type"] for a in diagnose([run(5)], state(5), NOW)["anomalies"]}
+        self.assertIn("missing_risk_violations", types)
+
+    def test_invalid_position_side(self):
+        s = state(5)
+        s["position_side"] = "HOLD"
+        types = {a["type"] for a in diagnose([run(5)], s, NOW)["anomalies"]}
+        self.assertIn("invalid_position_side", types)
+
+    def test_candle_ahead_of_state(self):
+        s = state(15)
+        s["last_candle_at"] = (NOW - dt.timedelta(minutes=5)).isoformat()
+        types = {a["type"] for a in diagnose([run(5)], s, NOW)["anomalies"]}
+        self.assertIn("candle_ahead_of_state", types)
+
+    def test_check_ahead_of_update(self):
+        s = state(5)
+        s["updated_at"] = (NOW - dt.timedelta(minutes=15)).isoformat()
+        types = {a["type"] for a in diagnose([run(5)], s, NOW)["anomalies"]}
+        self.assertIn("check_ahead_of_update", types)
+
+    def test_fractional_risk_counter_invalid(self):
+        s = state(5)
+        s["risk_violations"] = 0.5
+        types = {a["type"] for a in diagnose([run(5)], s, NOW)["anomalies"]}
+        self.assertIn("invalid_risk_violations", types)
+
 if __name__ == "__main__":
     unittest.main()
