@@ -1,0 +1,652 @@
+FOREX BOT PRO V2.1 CONSOLIDADA — REAUDITORIA DEEPSEEK
+PARTE 2/5: SUITE COMPLETA DE TESTES E FIXTURES SINTÉTICAS
+Fonte: https://github.com/veloraspaces0/forex-bot-pro-v1-demo/tree/auditoria-v2-1-consolidada-2026-11-04
+O fixture cifrado é sintético, não é o estado real da main.
+
+
+=============== INÍCIO tests/test_paper_bot.py ===============
+import sys
+import unittest
+from pathlib import Path
+from datetime import datetime, timedelta, timezone
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'v2'))
+import paper_bot as b
+
+UTC=timezone.utc
+
+def bars(count=60, start=datetime(2026, 11, 2, 9, 0, tzinfo=UTC)):
+    out=[]
+    for i in range(count):
+        o=1.08 + i*.00001
+        out.append(dict(time=b.stamp(start+timedelta(minutes=15*i)),
+                        open=o, high=o+.00025, low=o-.00025, close=o+.00005))
+    return out
+
+class PaperBotTests(unittest.TestCase):
+    def test_initial_mode(self):
+        s=b.initial()
+        self.assertEqual(s['balance'],100)
+        self.assertEqual(s['mode'],'PAPER_ONLY')
+    def test_indicators(self):
+        data=bars()
+        self.assertGreater(b.ema([x['close'] for x in data],9),1)
+        self.assertGreater(b.atr(data),0)
+        self.assertTrue(0<=b.rsi([x['close'] for x in data])<=100)
+    def test_bootstrap_no_backfill(self):
+        data=bars()
+        now=b.date(data[-1]['time'])+timedelta(minutes=10)
+        s=b.process(b.initial(),data,now)
+        self.assertEqual(len(s['trades']),0)
+        self.assertIsNone(s['position'])
+        self.assertEqual(s['last_bar'],data[-2]['time'])
+    def test_risk_and_leverage(self):
+        s=b.initial()
+        s['candles']=bars()
+        s['last_bar']=s['candles'][-1]['time']
+        s['last_quote']=1.08
+        b.enter(s,'BUY',1.08,b.date(s['last_bar'])+timedelta(minutes=20))
+        p=s['position']
+        self.assertIsNotNone(p)
+        self.assertLessEqual(p['planned_risk_usd'],.5+0.001)
+        self.assertLessEqual(p['units']*p['entry'],2000+0.1)
+        self.assertGreater(p['target'],p['entry'])
+    def test_stop_first_same_bar(self):
+        s=b.initial()
+        s['position']=dict(side='BUY',entry=1.1000,stop=1.099, target=1.101,units=100,
+                           first_exit_bar='2026-11-02T00:00:00Z')
+        b.check_exit(s,dict(time='2026-11-02T12:00:00Z',
+                            open=1.1000, high=1.102,low=1.098,close=1.1000))
+        self.assertIsNone(s['position'])
+        self.assertEqual(s['trades'][0]['reason'],'STOP')
+        self.assertLess(s['balance'],100)
+    def test_gapped_history_halts(self):
+        s=b.initial()
+        s['last_bar']='2026-11-01T00:00:00Z'
+        data=bars()
+        now=b.date(data[-1]['time'])+timedelta(minutes=20)
+        b.process(s,data,now)
+        self.assertEqual(s['status'],'data_gap')
+        self.assertIsNone(s['position'])
+if __name__=='__main__':
+    unittest.main()
+
+=============== FIM tests/test_paper_bot.py ===============
+
+
+=============== INÍCIO tests/test_v21_hardening.py ===============
+"""Offline deterministic regression tests. No network calls or real trades."""
+import base64
+import io
+import json
+import os
+import sys
+import tempfile
+import unittest
+import urllib.error
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'v2'))
+import paper_bot as b
+import runner
+
+UTC = timezone.utc
+
+def bars(count=80,start=datetime(2026,11,2,9,0,tzinfo=UTC)):
+    result=[]
+    for i in range(count):
+        op=1.084+i*.000005
+        result.append(dict(time=b.stamp(start+timedelta(minutes=15*i)),
+                           open=op,high=op+.0004,low=op-.0004,close=op+.00005))
+    return result
+
+def valid_payload(data):
+    return {'meta':{'symbol':'EUR/USD'},'values':[
+        dict(datetime=x['time'],open=str(x['open']),high=str(x['high']),
+             low=str(x['low']),close=str(x['close'])) for x in reversed(data)]}
+
+class PaperIntegrity(unittest.TestCase):
+    def test_no_duplicate_candle_or_trade_on_rerun(self):
+        data=bars()
+        s=b.initial()
+        now=b.date(data[-1]['time'])+timedelta(minutes=20)
+        b.process(s,data,now)
+        last_bar=s['last_bar']
+        events=len(s['events'])
+        b.process(s,data,now)
+        self.assertEqual(s['last_bar'],last_bar)
+        self.assertEqual(len(s['trades']),0)
+        self.assertEqual(len(s['events']),events)
+
+    def test_closed_bar_excludes_last_incomplete(self):
+        data=bars(80)
+        current=b.date(data[-1]['time'])+timedelta(minutes=7)
+        s=b.process(b.initial(),data,current)
+        self.assertEqual(s['last_bar'],data[-2]['time'])
+        self.assertEqual(s['candles'][-1]['time'],data[-2]['time'])
+        self.assertIsNone(s['position'])
+
+    def test_stale_quote_blocks_entry(self):
+        data=bars()
+        s=b.initial()
+        s['last_bar']=data[-2]['time']
+        s['candles']=data[:-2]
+        now=b.date(data[-1]['time'])+timedelta(minutes=22)
+        with patch.object(b,'signal',return_value='BUY') as patched:
+            b.process(s,data,now)
+        self.assertFalse(patched.called)
+        self.assertIsNone(s['position'])
+        self.assertEqual(s['status'],'market_closed_or_stale')
+
+    def test_enter_only_after_new_closed_candle_and_fresh_quote(self):
+        data=bars(80)
+        next_start=b.date(data[-1]['time'])+b.STEP
+        quote=dict(time=b.stamp(next_start),open=data[-1]['close'],high=data[-1]['close']+.0001,
+                   low=data[-1]['close']-.0001,close=data[-1]['close']+.00004)
+        s=b.initial()
+        s['candles']=data[:-1]
+        s['last_bar']=data[-2]['time']
+        with patch.object(b,'signal',return_value='BUY'):
+            b.process(s,data+[quote],next_start+timedelta(minutes=7))
+        self.assertIsNotNone(s['position'])
+        self.assertEqual(s['position']['signal_bar'],data[-1]['time'])
+        self.assertEqual(s['position']['first_exit_bar'],b.stamp(next_start+b.STEP))
+        self.assertLessEqual(s['position']['planned_risk_usd'],.5+.0001)
+        self.assertLessEqual(s['position']['units']*s['position']['entry'],2000+.01)
+
+    def test_no_exit_from_opening_candle_full_ohlc(self):
+        s=b.initial()
+        s['position']=dict(side='BUY',entry=1.085,stop=1.084,target=1.087,
+            first_exit_bar='2026-11-02T10:15:00Z',units=100,planned_risk_usd=.1)
+        b.check_exit(s,dict(time='2026-11-02T10:00:00Z',open=1.085,low=1.07,high=1.09))
+        self.assertIsNotNone(s['position'])
+        self.assertFalse(s['trades'])
+
+    def test_gap_exit_buy_marks_exceeded_risk(self):
+        s=b.initial()
+        s['position']=dict(side='BUY',entry=1.085,stop=1.084,target=1.088,
+            first_exit_bar='2026-11-02T10:15:00Z',units=333,planned_risk_usd=.333)
+        b.check_exit(s,dict(time='2026-11-02T10:15:00Z',open=1.082,low=1.081,high=1.086))
+        self.assertEqual(s['trades'][0]['reason'],'STOP')
+        self.assertLess(s['trades'][0]['pnl'],-.333)
+        self.assertTrue(any('RISK_EXCEEDED' in e['message'] for e in s['events']))
+        self.assertEqual(runner.summary(s)['risk_violations'],1)
+
+    def test_gap_exit_sell_marks_exceeded_risk(self):
+        s=b.initial()
+        s['position']=dict(side='SELL',entry=1.085,stop=1.086,target=1.082,
+            first_exit_bar='2026-11-02T10:15:00Z',units=333,planned_risk_usd=.333)
+        b.check_exit(s,dict(time='2026-11-02T10:15:00Z',open=1.090,low=1.084,high=1.091))
+        self.assertEqual(s['trades'][0]['reason'],'STOP')
+        self.assertLess(s['trades'][0]['pnl'],-.333)
+
+    def test_both_levels_touch_stop_first(self):
+        s=b.initial()
+        s['position']=dict(side='SELL',entry=1.085,stop=1.086,target=1.083,
+            first_exit_bar='2026-11-02T10:15:00Z',units=100,planned_risk_usd=.1)
+        b.check_exit(s,dict(time='2026-11-02T10:15:00Z',open=1.085,low=1.081,high=1.088))
+        self.assertEqual(s['trades'][0]['reason'],'STOP')
+
+    def test_bootstrap_fails_closed_on_initial_gap(self):
+        data=bars(81)
+        # Remove an active-market bar from the first window.
+        incomplete=data[:45]+data[46:]
+        s=b.process(b.initial(),incomplete,b.date(data[-1]['time'])+timedelta(minutes=20))
+        self.assertTrue(s['gap_halt'])
+        self.assertEqual(s['status'],'data_gap')
+        self.assertIsNone(s['last_bar'])
+        self.assertFalse(s['trades'])
+
+    def test_internal_history_gap_halts_before_processing(self):
+        data=bars(81)
+        s=b.initial()
+        s['last_bar']=data[-3]['time']
+        s['candles']=data[:-3]
+        s['status']='monitoring'
+        b.process(s,data[:-2]+data[-1:],b.date(data[-1]['time'])+timedelta(minutes=20))
+        self.assertEqual(s['status'],'data_gap')
+        self.assertTrue(s['gap_halt'])
+        self.assertEqual(s['last_bar'],data[-3]['time'])
+        self.assertFalse(s['trades'])
+
+    def test_gap_halt_is_latched_despite_status_overwrite(self):
+        data=bars()
+        s=b.initial()
+        s['last_bar']=data[-4]['time']
+        s['gap_halt']=True
+        s['status']='api_error'
+        b.process(s,data,b.date(data[-1]['time'])+timedelta(minutes=20))
+        self.assertEqual(s['status'],'data_gap')
+        self.assertEqual(s['last_bar'],data[-4]['time'])
+
+    def test_missing_weekend_bars_not_flagged_as_gap(self):
+        fri='2026-11-06T21:45:00Z'   # Friday 16:45 EST
+        sun='2026-11-08T22:00:00Z'   # Sunday 17:00 EST
+        self.assertFalse(b.missing_trading_bar(fri,sun))
+        self.assertTrue(b.missing_trading_bar('2026-11-02T10:00:00Z','2026-11-02T10:30:00Z'))
+
+    def test_risk_precision_on_stop_and_lots_both_sides(self):
+        for side in ('BUY','SELL'):
+            s=b.initial();s['candles']=bars();s['last_bar']=s['candles'][-1]['time']
+            b.enter(s,side,1.085,b.date(s['last_bar'])+timedelta(minutes=7))
+            self.assertLessEqual(s['position']['planned_risk_usd'],.5+.00001)
+            self.assertLessEqual(s['position']['units']*s['position']['entry'],2000+.01)
+            stop=s['position']['stop']
+            b.close(s,dict(time='2026-11-02T21:00:00Z'),stop,'STOP')
+            self.assertLessEqual(abs(s['trades'][0]['pnl']),.5005)
+
+    def test_utc_day_limit_blocks_entry(self):
+        data=bars(81)
+        s=b.initial();s['balance']=97;s['day_start_equity']=100
+        s['day']=data[-2]['time'][:10]
+        s['last_bar']=data[-3]['time'];s['candles']=data[:-3]
+        next_start=b.date(data[-1]['time'])+b.STEP
+        quote=dict(time=b.stamp(next_start),open=1.08,high=1.081,low=1.079,close=1.08)
+        with patch.object(b,'signal',return_value='BUY') as patched:
+            b.process(s,data+[quote],next_start+timedelta(minutes=7))
+        self.assertFalse(patched.called)
+        self.assertIsNone(s['position'])
+
+class DataFeedIntegrity(unittest.TestCase):
+    def test_parse_provider_normalizes_reverse_chronology(self):
+        data=b._parse_payload(valid_payload(bars(45)))
+        self.assertEqual(len(data),45)
+        self.assertLess(data[0]['time'],data[-1]['time'])
+
+    def test_reject_conflicting_duplicate(self):
+        obj=valid_payload(bars(45));d=obj['values'][0].copy();d['close']=str(float(d['close'])+.0001)
+        obj['values'].append(d)
+        with self.assertRaises(b.DataFeedError):b._parse_payload(obj)
+
+    def test_reject_nonfinite_and_invalid_range(self):
+        for key,value in [('open','NaN'),('low','5')]:
+            obj=valid_payload(bars(45));obj['values'][0][key]=value
+            with self.assertRaises(b.DataFeedError):b._parse_payload(obj)
+
+    def test_http_429_retry_no_key_exposure(self):
+        payload=json.dumps(valid_payload(bars(45))).encode('utf-8')
+        class Response(io.BytesIO):
+            def __enter__(self):return self
+            def __exit__(self,*args):self.close()
+        err=urllib.error.HTTPError('https://somewhere/?apikey=HIDDEN',429,'quota',{},None)
+        pauses=[]
+        with patch.object(b.urllib.request,'urlopen',side_effect=[err,Response(payload)]) as network:
+            result=b.api('DO_NOT_SHARE_THIS_KEY',retries=3,sleep=pauses.append)
+        self.assertEqual(len(result),45)
+        self.assertEqual(len(pauses),1)
+        self.assertEqual(network.call_count,2)
+
+    def test_nonretryable_http_403(self):
+        err=urllib.error.HTTPError('https://somewhere/?apikey=HIDDEN',403,'bad',{},None)
+        with patch.object(b.urllib.request,'urlopen',side_effect=err):
+            with self.assertRaisesRegex(b.DataFeedError,'provider_http_403') as c:
+                b.api('PRIVATE_KEY',sleep=lambda _:None)
+        self.assertNotIn('PRIVATE_KEY',str(c.exception))
+
+    def test_invalid_json_retries_and_fails_closed(self):
+        class Response(io.BytesIO):
+            def __enter__(self):return self
+            def __exit__(self,*args):self.close()
+        with patch.object(b.urllib.request,'urlopen',side_effect=[Response(b'{'),Response(b'{')]):
+            with self.assertRaisesRegex(b.DataFeedError,'provider_invalid_json'):
+                b.api('PRIVATE_KEY',retries=2,sleep=lambda _:None)
+
+    def test_state_migrates_missing_gap_halt(self):
+        s=b.initial();del s['gap_halt']
+        b.validate_state(s)
+        self.assertFalse(s['gap_halt'])
+
+class EncryptedStateIntegrity(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory()
+        self.original_enc,self.original_pub=runner.ENC,runner.PUB
+        runner.ENC=Path(self.tmp.name)/'state.enc'
+        runner.PUB=Path(self.tmp.name)/'state.json'
+        self.env=patch.dict(os.environ,{'V2_STATE_ENCRYPTION_KEY':''})
+        self.env.start()
+
+    def tearDown(self):
+        runner.ENC,runner.PUB=self.original_enc,self.original_pub
+        self.env.stop()
+        self.tmp.cleanup()
+
+    def test_legacy_encryption_format_roundtrip(self):
+        data=json.dumps(b.initial()).encode('utf-8')
+        runner.encrypt('API_PRIVATE_KEY',data)
+        self.assertEqual(json.loads(runner.decrypt('API_PRIVATE_KEY')),b.initial())
+        self.assertTrue(base64.b64decode(runner.ENC.read_bytes()).startswith(runner.HEADER))
+
+    def test_truncation_fails_closed_not_reinitialized(self):
+        runner.encrypt('API_PRIVATE_KEY',json.dumps(b.initial()).encode())
+        before=runner.ENC.read_bytes()
+        runner.ENC.write_bytes(before[:len(before)//2])
+        with self.assertRaises(Exception):runner.decrypt('API_PRIVATE_KEY')
+        self.assertTrue(runner.ENC.exists())
+
+    def test_atomic_replace_failure_preserves_previous_state(self):
+        file=Path(self.tmp.name)/'state.enc'
+        file.write_bytes(b'ORIGINAL')
+        with patch.object(runner.os,'replace',side_effect=OSError('simulated crash')):
+            with self.assertRaises(OSError):runner.atomic_write(file,b'NEW STATE')
+        self.assertEqual(file.read_bytes(),b'ORIGINAL')
+        self.assertEqual(list(Path(self.tmp.name).glob('*.tmp')),[])
+
+    def test_public_summary_omits_private_fields(self):
+        s=b.initial();s['status']='monitoring'
+        runner.write_public(s)
+        published=json.loads(runner.PUB.read_text())
+        self.assertFalse({'candles','position','last_quote','trades'} & published.keys())
+        self.assertEqual(published['mode'],'PAPER_ONLY')
+        self.assertEqual(published['gap_halt'],False)
+
+    def test_corrupt_state_raises_not_cleared(self):
+        runner.ENC.write_bytes(b'invalid')
+        with self.assertRaises(Exception):runner.decrypt('KEY')
+        self.assertEqual(runner.ENC.read_bytes(),b'invalid')
+
+if __name__=='__main__':unittest.main()
+
+=============== FIM tests/test_v21_hardening.py ===============
+
+
+=============== INÍCIO tests/test_v21_consolidation.py ===============
+"""Adversarial consolidation tests. Offline, fake prices, no broker/API secrets."""
+import io
+import json
+import os
+import ssl
+import sys
+import tempfile
+import unittest
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from unittest.mock import patch
+
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/'v2'))
+import paper_bot as b
+import recover_gap as recovery
+import runner
+from test_v21_hardening import bars, valid_payload
+
+UTC=timezone.utc
+FIXTURES=ROOT/'tests'/'fixtures'
+
+class DataValidationAdversarial(unittest.TestCase):
+    class Response(io.BytesIO):
+        def __enter__(self):return self
+        def __exit__(self,*args):self.close()
+
+    def test_provider_http200_error_429_retried(self):
+        good=json.dumps(valid_payload(bars(45))).encode()
+        error=json.dumps({'status':'error','code':429,'message':'throttled'}).encode()
+        pauses=[]
+        with patch.object(b.urllib.request,'urlopen',side_effect=[self.Response(error),self.Response(good)]) as urlopen:
+            parsed=b.api('TEST_ONLY',sleep=pauses.append)
+        self.assertEqual(len(parsed),45)
+        self.assertEqual(urlopen.call_count,2)
+        self.assertEqual(pauses,[2])
+
+    def test_provider_http200_error_401_fail_fast(self):
+        error=json.dumps({'status':'error','code':401,'message':'do not leak'}).encode()
+        with patch.object(b.urllib.request,'urlopen',return_value=self.Response(error)) as urlopen:
+            with self.assertRaisesRegex(b.DataFeedError,'provider_status_401') as err:
+                b.api('TOP_SECRET_KEY',sleep=lambda _:self.fail('Unexpected retry'))
+        self.assertNotIn('TOP_SECRET_KEY',str(err.exception))
+        self.assertEqual(urlopen.call_count,1)
+
+    def test_tls_error_is_retried(self):
+        good=json.dumps(valid_payload(bars(45))).encode()
+        with patch.object(b.urllib.request,'urlopen',side_effect=[ssl.SSLError('transient tls'),self.Response(good)]) as call:
+            parsed=b.api('TEST_KEY',sleep=lambda _:None)
+        self.assertEqual(len(parsed),45)
+        self.assertEqual(call.call_count,2)
+
+    def test_retries_zero_rejected_cleanly(self):
+        with self.assertRaisesRegex(ValueError,'positive integer'):
+            b.api('KEY',retries=0)
+
+    def test_status_message_migrated_and_bad_type_rejected(self):
+        s=b.initial()
+        del s['status'];del s['message'];del s['gap_halt']
+        b.validate_state(s)
+        self.assertEqual(s['status'],'unknown')
+        self.assertEqual(s['message'],'')
+        self.assertFalse(s['gap_halt'])
+        s['gap_halt']='False'
+        with self.assertRaises(ValueError):b.validate_state(s)
+
+class StateAndRiskAdversarial(unittest.TestCase):
+    def test_original_v2_encrypted_fixture_is_readable_and_migrates(self):
+        frozen=json.loads((FIXTURES/'v2_legacy_synthetic_state.json').read_text())
+        sealed=FIXTURES/'v2_legacy_synthetic_state.enc.txt'
+        self.assertNotIn('gap_halt',frozen)
+        with patch.dict(os.environ,{'V2_STATE_ENCRYPTION_KEY':''}):
+            legacy_json=json.loads(runner.decrypt('V2_SYNTHETIC_TEST_KEY_DO_NOT_USE',path=sealed))
+        self.assertEqual(frozen,legacy_json)
+        migrated=b.validate_state(legacy_json)
+        self.assertFalse(migrated['gap_halt'])
+        self.assertEqual(migrated['balance'],99.5)
+        self.assertEqual(len(migrated['trades']),1)
+        self.assertEqual(migrated['trades'][0]['reason'],'STOP')
+
+    def test_idempotency_when_series_grows_then_repeats(self):
+        beginning=bars(65)
+        s=b.process(b.initial(),beginning,b.date(beginning[-1]['time'])+timedelta(minutes=20))
+        old_last=s['last_bar']
+        extended=bars(81)  # final bar is still forming: use only 80 closed bars
+        now=b.date(extended[-1]['time'])+timedelta(minutes=7)
+        with patch.object(b,'signal',return_value='BUY') as spy:
+            b.process(s,extended,now)
+            self.assertGreater(s['last_bar'],old_last)
+            self.assertTrue(spy.called)
+            previous_trade_count=len(s['trades'])
+            previous_events=len(s['events'])
+            previous_position=json.dumps(s['position'],sort_keys=True)
+            spy.reset_mock()
+            b.process(s,extended,now)
+            self.assertFalse(spy.called)
+        self.assertEqual(s['last_bar'],extended[-2]['time'])
+        self.assertEqual(len(s['trades']),previous_trade_count)
+        self.assertEqual(len(s['events']),previous_events)
+        self.assertEqual(json.dumps(s['position'],sort_keys=True),previous_position)
+
+    def test_daily_loss_guard_fails_but_allows_identical_positive_case(self):
+        data=bars(81)
+        next_start=b.date(data[-1]['time'])+b.STEP
+        quote=dict(time=b.stamp(next_start),open=1.08,high=1.081,low=1.079,close=1.08)
+        def make_state(balance):
+            s=b.initial();s['balance']=balance;s['day_start_equity']=100
+            s['day']=data[-2]['time'][:10]
+            s['last_bar']=data[-3]['time'];s['candles']=data[:-3]
+            return s
+        with patch.object(b,'signal',return_value='BUY') as spy:
+            denied=make_state(97)
+            b.process(denied,data+[quote],next_start+timedelta(minutes=7))
+            self.assertFalse(spy.called)
+            self.assertIsNone(denied['position'])
+            spy.reset_mock()
+            accepted=make_state(99.5)
+            b.process(accepted,data+[quote],next_start+timedelta(minutes=7))
+            self.assertTrue(spy.called)
+            self.assertIsNotNone(accepted['position'])
+
+    def test_risk_is_near_budget_both_directions_for_unconstrained_case(self):
+        for side in ('BUY','SELL'):
+            s=b.initial();s['candles']=bars(80);s['last_bar']=s['candles'][-1]['time']
+            b.enter(s,side,1.085,b.date(s['last_bar'])+timedelta(minutes=7))
+            pos=s['position']
+            self.assertIsNotNone(pos)
+            self.assertGreaterEqual(pos['planned_risk_usd'],0.49)
+            self.assertLessEqual(pos['planned_risk_usd'],0.50001)
+            self.assertLessEqual(pos['units']*pos['entry'],2000.01)
+
+    def test_exact_boundary_entry_cannot_exit_on_same_bar(self):
+        s=b.initial();s['candles']=bars(80);s['last_bar']=s['candles'][-1]['time']
+        clock=datetime(2026,11,3,10,0,tzinfo=UTC)
+        b.enter(s,'BUY',1.085,clock)
+        self.assertEqual(s['position']['first_exit_bar'],'2026-11-03T10:15:00Z')
+        b.check_exit(s,dict(time='2026-11-03T10:00:00Z',open=1.085,high=1.09,low=1.07))
+        self.assertIsNotNone(s['position'])
+        b.check_exit(s,dict(time='2026-11-03T10:15:00Z',open=1.085,high=1.09,low=1.07))
+        self.assertIsNone(s['position'])
+
+    def test_public_summary_displays_individual_risk_excess(self):
+        s=b.initial();s['balance']=98.7
+        s['trades']=[dict(exit_at='2026-11-02T11:00:00Z',side='BUY',pnl=-1.2,reason='STOP',planned_risk_usd=.5),
+                     dict(exit_at='2026-11-02T12:00:00Z',side='SELL',pnl=-.1,reason='STOP',planned_risk_usd=.5)]
+        out=runner.summary(s)
+        self.assertEqual(out['risk_violations'],1)
+        self.assertFalse(out['closed_results'][0]['risk_exceeded'])
+        self.assertTrue(out['closed_results'][1]['risk_exceeded'])
+        self.assertEqual(out['closed_results'][1]['planned_risk_usd'],.5)
+        self.assertFalse({'candles','position','trades','last_quote'} & out.keys())
+
+    def test_blocked_entry_emits_reason(self):
+        s=b.initial();s['gap_halt']=True
+        b.enter(s,'BUY',1.085,datetime(2026,11,2,12,0,tzinfo=UTC))
+        self.assertIsNone(s['position'])
+        self.assertIn('ENTRY_BLOCKED_BY_GAP_HALT',s['events'][-1]['message'])
+
+class ManualRecoveryAdversarial(unittest.TestCase):
+    def new_state(self):
+        s=b.initial();s['gap_halt']=True;s['balance']=97.5
+        s['last_bar']=bars(20)[-1]['time']
+        s['status']='data_gap'
+        return s
+
+    def good_snapshot(self):
+        src=bars(80)
+        return valid_payload(src),b.date(src[-1]['time'])+timedelta(minutes=20)
+
+    def test_proposal_preserves_balance_trades_and_records_skip(self):
+        s=self.new_state();data,now=self.good_snapshot()
+        amended=recovery.propose_recovery(s,data,now,'Reviewed and accepted missing data')
+        self.assertTrue(s['gap_halt'])  # pure, input unchanged
+        self.assertFalse(amended['gap_halt'])
+        self.assertEqual(amended['status'],'recovery_paused')
+        self.assertEqual(amended['balance'],97.5)
+        self.assertEqual(amended['trades'],s['trades'])
+        self.assertEqual(amended['last_bar'],bars(80)[-1]['time'])
+        self.assertEqual(len(amended['candles']),40)
+        self.assertIsNone(amended['last_quote'])
+        self.assertIn('RECOVERY_GAP_SKIPPED',amended['events'][-1]['message'])
+        self.assertEqual(amended['recovery_count'],1)
+
+    def test_open_position_refuses_recovery(self):
+        s=self.new_state();s['position']=dict(side='BUY',entry=1.085,units=100)
+        data,now=self.good_snapshot()
+        with self.assertRaisesRegex(ValueError,'Open paper position'):
+            recovery.propose_recovery(s,data,now,'Operator reviewed snapshot')
+
+    def test_unresolved_gap_in_tail_refuses_recovery(self):
+        s=self.new_state();data,now=self.good_snapshot()
+        del data['values'][2]  # newest OHLC in reverse chronology: gap inside the trailing 40
+        with self.assertRaisesRegex(ValueError,'not strictly contiguous'):
+            recovery.propose_recovery(s,data,now,'Operator reviewed snapshot')
+
+    def test_old_or_nonadvancing_snapshot_refuses_recovery(self):
+        s=self.new_state();data,now=self.good_snapshot()
+        with self.assertRaisesRegex(ValueError,'freshness window'):
+            recovery.propose_recovery(s,data,now+timedelta(hours=3),'Operator reviewed snapshot')
+        s['last_bar']=bars(80)[-1]['time']
+        with self.assertRaisesRegex(ValueError,'No newer completed candle'):
+            recovery.propose_recovery(s,data,now,'Operator reviewed snapshot')
+
+    def test_recovery_refuses_apply_to_repository_path(self):
+        from contextlib import redirect_stderr
+        with tempfile.TemporaryDirectory() as folder:
+            outside=Path(folder)
+            data,now=self.good_snapshot()
+            reviewed=outside/'reviewed.json'
+            reviewed.write_text(json.dumps(data))
+            with redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as stop:
+                    recovery.main(['--state',str(ROOT/'v2'/'state.enc'),
+                        '--snapshot',str(reviewed),'--reason','Reviewed exchange holiday',
+                        '--apply','--acknowledge-skipped-paper-trades',
+                        '--backup',str(outside/'recovery-backup.enc')])
+            self.assertEqual(stop.exception.code,2)
+            self.assertFalse((outside/'recovery-backup.enc').exists())
+
+    def test_backup_is_exclusive(self):
+        with tempfile.TemporaryDirectory() as folder:
+            target=Path(folder)/'original.enc'
+            recovery.backup_bytes_exclusive(target,b'FAKE CIPHERTEXT')
+            self.assertEqual(target.read_bytes(),b'FAKE CIPHERTEXT')
+            with self.assertRaises(FileExistsError):
+                recovery.backup_bytes_exclusive(target,b'OTHER')
+            self.assertEqual(target.read_bytes(),b'FAKE CIPHERTEXT')
+
+if __name__=='__main__':unittest.main()
+
+=============== FIM tests/test_v21_consolidation.py ===============
+
+
+=============== INÍCIO tests/fixtures/README.md ===============
+# Fixture sintética V2 (sem dados reais)
+
+`v2_legacy_synthetic_state.json` reproduz o esquema do `initial()` da V2 antiga, acrescido de um trade simulado fictício. **Não é estado de produção** e não contém dados originais de mercado ou credenciais. `v2_legacy_synthetic_state.enc.txt` foi produzido **independentemente do `runner.py` V2.1**, pela fórmula de cifragem da V2 congelada no commit `aaa71a728c4d1dee8c9aef0eb1c65ee2a85da271`: `FX2` + nonce de 12 bytes + AES-256-GCM(PBKDF2-HMAC-SHA256, salt `fxbot-v2-v1`, 180.000 iterações, AAD `forex-bot-pro-v2-paper-only`). A chave pública de teste é `V2_SYNTHETIC_TEST_KEY_DO_NOT_USE` e o nonce sintético é `000102030405060708090a0b` em hexadecimal. Nunca use esses valores para produção.
+
+A V2.1 precisa decifrar esse ciphertext com os campos V2 antigos, migrar `gap_halt`, e preservar saldo, trades e posição. Isso valida o **formato criptográfico e o esquema de teste**, não comprova a decifragem do `state.enc` de produção nem o acesso à chave operacional verdadeira.
+
+=============== FIM tests/fixtures/README.md ===============
+
+
+=============== INÍCIO tests/fixtures/v2_legacy_synthetic_state.json ===============
+{
+  "version": 2,
+  "mode": "PAPER_ONLY",
+  "source": "Twelve Data",
+  "pair": "EUR/USD",
+  "interval": "15min",
+  "initial_balance": 100,
+  "balance": 99.5,
+  "risk_per_trade": 0.005,
+  "daily_loss_limit": 0.02,
+  "max_leverage": 20,
+  "spread": 0.00012,
+  "position": null,
+  "trades": [
+    {
+      "side": "SELL",
+      "entry_at": "2026-11-02T10:00:00Z",
+      "signal_bar": "2026-11-02T09:45:00Z",
+      "first_exit_bar": "2026-11-02T10:15:00Z",
+      "entry": 1.085,
+      "stop": 1.0865,
+      "target": 1.082,
+      "units": 333,
+      "planned_risk_usd": 0.4995,
+      "exit_at": "2026-11-02T10:45:00Z",
+      "exit": 1.0865,
+      "pnl": -0.5,
+      "reason": "STOP"
+    }
+  ],
+  "candles": [],
+  "events": [
+    {
+      "at": "2026-11-02T10:45:00Z",
+      "message": "SELL closed STOP P/L -0.50"
+    }
+  ],
+  "last_bar": "2026-11-02T11:00:00Z",
+  "last_quote": 1.085,
+  "day": "2026-11-02",
+  "day_start_equity": 100,
+  "updated_at": "2026-11-02T11:01:00Z",
+  "last_checked_at": "2026-11-02T11:01:00Z",
+  "status": "monitoring",
+  "message": "3 candles novos processados; simulação."
+}
+
+=============== FIM tests/fixtures/v2_legacy_synthetic_state.json ===============
+
+
+=============== INÍCIO tests/fixtures/v2_legacy_synthetic_state.enc.txt ===============
+RlgyAAECAwQFBgcICQoLtEO3N4W0BDg/JR6XbbDHaTj1tclBFKLpo64wLgkEZOGwJlAHQ8U9tNg4UkHe8iNe9LMgqS8Mc66ek8yrbYTSdKqZItSJFnNAXxix8aySEBHhDto0Uqt1hr46NWx5nuD6x/bnRVQ7LGTVgPmzlH4W14tv6zvA9dcd41e91ZKIYGoGvNeCaCg56cajU9rimEN8ObUPMr6HViMLl7CK5kuOx6BsGQHxJZLKpCdUNi5vMOf1+0p+LWrnH4qP94365iwpQhr05XkrEfxG4wPhDqMfccazbps7uGNsUvhVsrxiZ4vNjrTey1O/48tsxicmG2Coy480iyle3CV8ckuHp3SpzakzSEVhVHD1KPMWAimrU5tGytrS4CJKN11Arr8mrkOCZK1PhdR6Lk5vxldqH/DY096O1BmZ4H84hn3yfy67JAHiDCLiz1awWKrBQtv8S4l0zuA4segVPYJ1gK4XfpyZv/N17OH5KwXoCCUWAP3JQNnEDGJQOE11YyccsrSoe0J//QEYwIeEsVanOtIhycjA+YYWYEAy8MDj0vBwf/2RJGxKYgUgBi7dAzBvUoZCTQpIMIcgzf9nwCZUFGvM6U7WgPoOmckTVAmr+0xAyvKdgt8d94254mBZeoNuiu247uyCJB6r+LqK5iwbyP8n2D56y2kOcoS4ACYVpDHazxX8ryfFH15jBekyjOSLaNG+21RKpc8vd7cKeq1mAEYu2ZuWYo7b3b+i9UISDRe3RzuxdrGkhYEJnVl6MqWkTVx2d8gZ/UBYlSJHK4rczS/6eQ2z7znHsbw4r5wVu6KJ9iBL1oPz3NCxjjZsuAz+KZ7y/npYz3z1xDcdXU+KqR6Y3vMtO5bXu62qi3cUiWYEXjJP73TT6E0DtthQMqNN/yb9j+OEoT3d0a8DXE1ITkdSddfVpXcV+b7e2XcCOSpfaQkilqps7i//643o8cL4fOYwnTdAXjdXPCFVP1+Ts/P0epkbzFGlQgYsCkgB1G0UPxgvbB94wT3HJKBV/VNoDvtFI+DJi3YTwFbw3FkLWy8ftOu3fI1GqsCuPQzXKN/fh2OpcY8HEbEBipRdYfS+whX60O63RFv4V2bSSi+HjjARQCDAQDo61Fd3o0Lth2WbCUuP32PQn7TN3l4nH7z404LO1tog229NTj5snypNGb1a
+
+=============== FIM tests/fixtures/v2_legacy_synthetic_state.enc.txt ===============
