@@ -25,19 +25,26 @@ def fetch_workflow_runs(base, max_pages=5):
     all_runs = []
     seen_ids = set()
     expected = None
+    pagination_anomalies = []
     for page in range(1, max_pages + 1):
         payload = fetch_json(
             f"{base}/actions/workflows/{WORKFLOW}/runs?branch=main&per_page=100&page={page}"
         )
         if not isinstance(payload, dict) or not isinstance(payload.get("workflow_runs"), list):
             raise ValueError("Invalid workflow_runs API payload")
-        if not isinstance(payload.get("total_count"), int):
+        if type(payload.get("total_count")) is not int:
             raise ValueError("Missing total_count in workflow_runs API payload")
         if payload["total_count"] < 0:
             raise ValueError("Invalid negative total_count")
         if expected is None:
             expected = payload["total_count"]
         batch = payload["workflow_runs"]
+        if len(batch) > 100:
+            raise ValueError("Workflow page exceeds per_page=100")
+        if payload["total_count"] != expected:
+            pagination_anomalies.append("total_count_changed")
+        if not batch and len(all_runs) < expected:
+            pagination_anomalies.append("unexpected_empty_page")
         for item in batch:
             if not isinstance(item, dict):
                 raise ValueError("Invalid workflow run entry")
@@ -50,7 +57,8 @@ def fetch_workflow_runs(base, max_pages=5):
         if len(batch) < 100 or len(all_runs) >= expected:
             break
     return {"workflow_runs": all_runs, "total_count": expected,
-            "history_incomplete": len(all_runs) < expected}
+            "history_incomplete": len(all_runs) < expected,
+            "pagination_anomalies": sorted(set(pagination_anomalies))}
 
 def parse_time(value):
     parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -175,6 +183,8 @@ def main():
         report = diagnose(runs["workflow_runs"], state, dt.datetime.now(UTC))
         if runs.get("history_incomplete") or runs.get("total_count", len(runs["workflow_runs"])) > len(runs["workflow_runs"]):
             report["anomalies"].append({"type": "history_truncated", "reason": "bounded_history_limit"})
+        for anomaly in runs.get("pagination_anomalies", []):
+            report["anomalies"].append({"type": "pagination_inconsistency", "reason": anomaly})
         print(json.dumps(report, indent=2, ensure_ascii=False))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"VERIFICATION_FAILED: {exc}", file=sys.stderr)
