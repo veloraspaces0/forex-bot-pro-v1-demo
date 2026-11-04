@@ -10,6 +10,7 @@ on:
       - auditoria-adversarial-watch-v23-20261104
       - fix/forex-watch-v231-github-diagnostics-20261104
       - fix/forex-watch-v232-github-403-diagnostics
+      - fix/forex-watch-v233-resilience
     paths:
       - 'experimentos/forex_watch_v23.py'
       - 'experimentos/forex_watch_v23_worker.mjs'
@@ -73,3 +74,4 @@ jobs:
       - name: Execute real PowerShell user preflight (NO login, NO deploy)
         shell: powershell
         run: .\\experimentos\\setup_watch_v23.ps1 -PreflightOnly
+
