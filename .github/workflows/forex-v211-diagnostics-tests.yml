@@ -1,0 +1,27 @@
+name: Forex V2.1.1 - Schedule Diagnostics Tests
+
+on:
+  push:
+    branches:
+      - fix/v211-scheduler-reliability-diagnostics
+    paths:
+      - 'experimentos/forex_v211_schedule_diagnostics.py'
+      - 'tests/test_forex_v211_schedule_diagnostics.py'
+      - '.github/workflows/forex-v211-diagnostics-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-diagnostics:
+    if: github.ref == 'refs/heads/fix/v211-scheduler-reliability-diagnostics'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify read-only schedule diagnostics offline
+        run: python -m unittest discover -s tests -p 'test_forex_v211_schedule_diagnostics.py' -v
