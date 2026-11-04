@@ -1,6 +1,8 @@
-# Dados privados da simulacao V2: NUNCA publicar
+# Protect private trading inputs and runtime artifacts
+.env
+.env.*
 v2/state.private.json
-v2/*.tmp
+v2/state.private.json.*
 __pycache__/
 *.pyc
-.env
+.pytest_cache/
