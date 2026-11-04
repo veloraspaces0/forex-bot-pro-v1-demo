@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {assess,fxMarketClosed,sundayGrace,minutesAgo,deliver,runCheck,readPublic,signalHeartbeat,scheduledCheck}
+import {assess,assessContinuity,fxMarketClosed,sundayGrace,minutesAgo,deliver,runCheck,readPublic,signalHeartbeat,scheduledCheck}
   from "../experimentos/forex_watch_v23_worker.mjs";
 
 const NOW=Date.parse("2026-11-04T16:00:00Z");
@@ -345,7 +345,9 @@ test("telegram outage sends heartbeat /fail as fallback when active",async()=>{
   };
   await assert.rejects(scheduledCheck(env,NOW,fake),/WATCH_CYCLE_FAILED/);
   assert.ok(urls.some(u=>u.endsWith("/fail")));
-  assert.equal(store.records.size,0);
+  // A public-history observation can be written before Telegram fails,
+  // but the incident must NEVER be marked as delivered.
+  assert.ok(!store.records.has("forex-watch-v23-incident"));
 });
 
 test("public risk violations always require a critical alarm",()=>{
@@ -397,4 +399,70 @@ test("malformed middle GitHub workflow timestamp cannot quietly pass green",()=>
   const rr=runs();
   rr[3].created_at="2026-11-04T15:10:00";
   assert.throws(()=>assess(state(),rr,NOW),/Timestamp missing explicit timezone/);
+});
+
+test("historical closed-trade rollback or candle regression is CRITICO",async()=>{
+  const store=memoryKV(),env=activeEnv(store);
+  const first=assess(state(),runs(),NOW);
+  await assessContinuity(first,env,NOW);
+  assert.equal(first.status,"OK");
+  const later=NOW+15*60000;
+  const decreased=assess(state(4,50,false,later,{
+    closed_trades:0, balance:99.50,estimated_equity:99.45}),
+    runs([4,19,34,49,64],later),later);
+  await assessContinuity(decreased,env,later);
+  assert.equal(decreased.status,"CRITICO");
+  assert.ok(codes(decreased).includes("HISTORY_REGRESSION_SUSPECTED"));
+  const stored=JSON.parse(store.records.get("forex-watch-v23-public-history"));
+  assert.equal(stored.closedTrades,1,"Do not overwrite good baseline with regressed public history");
+});
+test("floating paper equity is not mistaken for a history regression",async()=>{
+  const store=memoryKV(),env=activeEnv(store);
+  const first=assess(state(),runs(),NOW);
+  await assessContinuity(first,env,NOW);
+  const later=NOW+15*60000;
+  const next=assess(state(4,20,false,later,{
+    balance:99.50,estimated_equity:97.01}),
+    runs([4,19,34,49,64],later),later);
+  await assessContinuity(next,env,later);
+  assert.ok(!codes(next).includes("HISTORY_REGRESSION_SUSPECTED"));
+});
+test("KV outage during continuity is surfaced as degraded",async()=>{
+  const env=activeEnv({get:async()=>{throw Error("KV down")}});
+  const report=assess(state(),runs(),NOW);
+  await assessContinuity(report,env,NOW);
+  assert.equal(report.continuityDegraded,true);
+  assert.ok(codes(report).includes("HISTORY_CONTINUITY_UNAVAILABLE"));
+  assert.equal(report.status,"ATENCAO");
+});
+test("KV outage sends Telegram warning and /fail heartbeat",async()=>{
+  const addresses=[];
+  const KV={
+    get:async()=>{throw Error("KV offline")},
+    put:async()=>{throw Error("KV offline")},
+    delete:async()=>{throw Error("KV offline")}
+  };
+  const env={...activeEnv(KV),MONITOR_HEARTBEAT_URL:
+    "https://hc-ping.com/01234567-89ab-cdef-0123-456789abcdef"};
+  const fake=async(url)=>{
+    const u=String(url);addresses.push(u);
+    if(u.includes("hc-ping.com"))return new Response("",{status:200});
+    if(u.includes("api.telegram.org"))return new Response('{"ok":true}',{status:200});
+    if(u.includes("/contents/"))return new Response(JSON.stringify({
+      encoding:"base64",content:Buffer.from(JSON.stringify(state())).toString("base64")
+    }),{status:200});
+    return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+  };
+  await assert.rejects(scheduledCheck(env,NOW,fake),/WATCH_CYCLE_FAILED/);
+  assert.ok(addresses.some(x=>x.includes("api.telegram.org")),"Failure should reach primary alert channel");
+  assert.ok(addresses.some(x=>x.endsWith("/fail")),"Independent dead-man switch must signal degraded persistence");
+});
+test("missing or invalid ALERT_MODE is rejected, not silently observe",async()=>{
+  for(const mode of [null,"observ","ACTIVE",""]) {
+    const env={ALERT_MODE:mode};
+    let called=0;
+    await assert.rejects(scheduledCheck(env,NOW,async()=>{called++;throw Error("No network allowed")}),
+      /WATCH_CYCLE_FAILED/);
+    assert.equal(called,0);
+  }
 });
