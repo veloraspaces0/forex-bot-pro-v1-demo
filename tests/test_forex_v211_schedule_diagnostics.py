@@ -551,5 +551,29 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         result = diagnose([run(-15)], state(5), NOW)
         self.assertIn("no_successful_scheduled_runs", {a["type"] for a in result["anomalies"]})
 
+
+    def test_fifty_cron_slot_offsets_adversarial(self):
+        # 50 independent input cases, with one assertion group per minute.
+        # Checks rollover across hours and the exact 07/22/37/52 UTC schedule.
+        for minute in range(50):
+            with self.subTest(minute=minute):
+                r = run(5)
+                r["created_at"] = NOW.replace(hour=20, minute=minute, second=30).isoformat()
+                result = diagnose([r], state(5), NOW)
+                expected = round((((minute - 7) % 15) * 60 + 30) / 60, 2)
+                self.assertEqual(result["max_dispatch_offset_minutes"], expected)
+                self.assertEqual(result["max_recent_dispatch_offset_minutes"], expected)
+                self.assertEqual(result["recent_scheduled_runs"], 1)
+
+    def test_future_run_not_used_as_last_run(self):
+        result = diagnose([run(-15), run(40)], state(5), NOW)
+        self.assertEqual(result["last_run_age_minutes"], 40)
+        self.assertIn("run_late", {a["type"] for a in result["anomalies"]})
+
+    def test_future_only_run_is_not_healthy(self):
+        result = diagnose([run(-15)], state(5), NOW)
+        self.assertIn("no_valid_scheduled_runs", {a["type"] for a in result["anomalies"]})
+        self.assertIsNone(result["max_recent_dispatch_offset_minutes"])
+
 if __name__ == "__main__":
     unittest.main()
