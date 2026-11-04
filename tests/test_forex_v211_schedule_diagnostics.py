@@ -3,7 +3,7 @@ import unittest
 import io
 import urllib.error
 from unittest.mock import patch
-from experimentos.forex_v211_schedule_diagnostics import diagnose, fetch_workflow_runs, fetch_json, forex_market_open
+from experimentos.forex_v211_schedule_diagnostics import diagnose, fetch_workflow_runs, fetch_json, forex_market_open, cron_slot_evidence
 
 UTC = dt.timezone.utc
 NOW = dt.datetime(2026, 11, 4, 21, 20, tzinfo=UTC)
@@ -690,6 +690,63 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         result = diagnose([run(5), run(20)], sample, NOW)
         self.assertTrue(result["required_evidence_complete"])
         self.assertEqual(result["operational_health"], "healthy")
+
+
+    def test_cron_evidence_expected_slots_are_bounded(self):
+        result = cron_slot_evidence([], NOW)
+        self.assertGreaterEqual(result["expected_slots"], 7)
+        self.assertLessEqual(result["expected_slots"], 9)
+        self.assertEqual(result["matched_slots"], 0)
+
+    def test_cron_evidence_exact_slot_matches(self):
+        r = run(5)
+        r["created_at"] = "2026-11-04T21:07:00Z"
+        result = cron_slot_evidence([r], NOW)
+        self.assertEqual(result["matched_slots"], 1)
+        self.assertEqual(result["matches"][0]["offset_minutes"], 0.0)
+
+    def test_cron_evidence_late_run_within_tolerance(self):
+        r = run(5)
+        r["created_at"] = "2026-11-04T21:09:00Z"
+        result = cron_slot_evidence([r], NOW)
+        self.assertEqual(result["matched_slots"], 1)
+        self.assertEqual(result["matches"][0]["offset_minutes"], 2.0)
+
+    def test_cron_evidence_late_run_outside_tolerance(self):
+        r = run(5)
+        r["created_at"] = "2026-11-04T21:11:00Z"
+        result = cron_slot_evidence([r], NOW)
+        self.assertEqual(result["matched_slots"], 0)
+        self.assertEqual(result["unmatched_observed_runs"], 1)
+
+    def test_cron_evidence_does_not_double_match_run(self):
+        r = run(5)
+        r["created_at"] = "2026-11-04T21:07:00Z"
+        result = cron_slot_evidence([r, r], NOW)
+        self.assertEqual(result["matched_slots"], 1)
+
+    def test_cron_evidence_excludes_push_runs(self):
+        r = dict(run(5), event="push", created_at="2026-11-04T21:07:00Z")
+        result = cron_slot_evidence([r], NOW)
+        self.assertEqual(result["matched_slots"], 0)
+
+    def test_cron_evidence_excludes_feature_branch(self):
+        r = dict(run(5), head_branch="feature", created_at="2026-11-04T21:07:00Z")
+        result = cron_slot_evidence([r], NOW)
+        self.assertEqual(result["matched_slots"], 0)
+
+    def test_cron_evidence_rejects_invalid_tolerance(self):
+        with self.assertRaises(ValueError):
+            cron_slot_evidence([], NOW, tolerance_minutes=8)
+
+    def test_cron_evidence_rejects_invalid_lookback(self):
+        with self.assertRaises(ValueError):
+            cron_slot_evidence([], NOW, lookback_minutes=0)
+
+    def test_cron_evidence_never_claims_proven_skips(self):
+        result = cron_slot_evidence([], NOW)
+        self.assertIn("not proof", result["interpretation"])
+        self.assertEqual(len(result["unmatched_slots"]), result["expected_slots"])
 
 if __name__ == "__main__":
     unittest.main()
