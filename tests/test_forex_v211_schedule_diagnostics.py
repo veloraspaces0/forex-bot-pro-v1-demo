@@ -68,5 +68,28 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         self.assertIn("no_scheduled_runs_in_response", types)
         self.assertIn("critical_open_position_unchecked", types)
 
+
+    def test_future_state_timestamp_is_flagged(self):
+        s = state(-20)
+        result = diagnose([run(5)], s, NOW)
+        self.assertIn("future_timestamp", {a["type"] for a in result["anomalies"]})
+        self.assertIsNone(result["state_age_minutes"])
+
+    def test_missing_timestamp_open_position_is_critical(self):
+        s = state(5)
+        del s["last_checked_at"]
+        result = diagnose([run(5)], s, NOW)
+        self.assertIn("critical_open_position_unchecked", {a["type"] for a in result["anomalies"]})
+
+    def test_truncated_history_is_reported(self):
+        result = diagnose([run(i * 15 + 1) for i in range(100)], state(5), NOW)
+        self.assertIn("history_truncated", {a["type"] for a in result["anomalies"]})
+
+    def test_inconsistent_run_start_is_flagged(self):
+        r = run(5)
+        r["run_started_at"] = (NOW - dt.timedelta(minutes=10)).isoformat()
+        result = diagnose([r], state(5), NOW)
+        self.assertIn("inconsistent_run_timestamps", {a["type"] for a in result["anomalies"]})
+
 if __name__ == "__main__":
     unittest.main()
