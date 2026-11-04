@@ -9,7 +9,7 @@ NOW = dt.datetime(2026, 11, 4, 21, 20, tzinfo=UTC)
 def run(minute, conclusion="success"):
     t = NOW - dt.timedelta(minutes=minute)
     return {"head_branch": "main", "name": "Forex Bot Pro V2 - Paper EURUSD",
-            "event": "schedule", "created_at": t.isoformat(),
+            "event": "schedule", "id": minute + 100000, "created_at": t.isoformat(),
             "html_url": f"https://github.com/example/actions/runs/{minute}",
             "conclusion": conclusion}
 
@@ -341,6 +341,28 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         result = diagnose([run(5), run(180, "failure")], state(5), NOW)
         self.assertNotIn("workflow_failure", {a["type"] for a in result["anomalies"]})
         self.assertIn("workflow_failure", {a["type"] for a in result["historical_anomalies"]})
+
+
+    def test_missing_run_id_fails_closed(self):
+        item = run(5)
+        del item["id"]
+        with patch("experimentos.forex_v211_schedule_diagnostics.fetch_json",
+                   return_value={"total_count": 1, "workflow_runs": [item]}):
+            with self.assertRaises(ValueError):
+                fetch_workflow_runs("https://api.github.com/repos/example/repo")
+
+    def test_old_queue_delay_is_historical(self):
+        r = run(180)
+        r["run_started_at"] = (NOW - dt.timedelta(minutes=160)).isoformat()
+        result = diagnose([run(5), r], state(5), NOW)
+        self.assertNotIn("runner_queue_delay", {a["type"] for a in result["anomalies"]})
+        self.assertIn("runner_queue_delay", {a["type"] for a in result["historical_anomalies"]})
+
+    def test_recent_queue_delay_still_alerts(self):
+        r = run(40)
+        r["run_started_at"] = (NOW - dt.timedelta(minutes=20)).isoformat()
+        result = diagnose([r], state(5), NOW)
+        self.assertIn("runner_queue_delay", {a["type"] for a in result["anomalies"]})
 
 if __name__ == "__main__":
     unittest.main()
