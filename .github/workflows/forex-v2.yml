@@ -1,6 +1,11 @@
 name: Forex Bot Pro V2 - Paper EURUSD
 
 on:
+  push:
+    paths:
+      - 'v2/*.py'
+      - 'v2/tests/**'
+      - '.github/workflows/forex-v2.yml'
   workflow_dispatch:
   schedule:
     # 7 minutos apos o fechamento de cada candle de 15 minutos (UTC).
