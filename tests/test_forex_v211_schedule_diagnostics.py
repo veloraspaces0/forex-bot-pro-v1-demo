@@ -656,5 +656,40 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         report = diagnose([run(5), run(20)], state(5), NOW)
         self.assertEqual(report["operational_health"], "unverified")
 
+
+    def test_fifty_state_freshness_boundaries_are_not_false_green(self):
+        # 50 separate age-boundary scenarios around state staleness and open
+        # simulated-position critical checks, without modifying live state.
+        for age in range(1, 51):
+            with self.subTest(state_age_minutes=age):
+                sample = state(age, opened=True)
+                sample.update(
+                    mode="PAPER_ONLY", pair="EUR/USD", risk_violations=0,
+                    last_candle_at=(NOW - dt.timedelta(minutes=5)).isoformat(),
+                )
+                result = diagnose([run(5), run(20)], sample, NOW)
+                types = {a["type"] for a in result["anomalies"]}
+                self.assertEqual("state_stale" in types, age > 30)
+                self.assertEqual("critical_open_position_unchecked" in types, age > 35)
+                self.assertEqual(result["operational_health"] == "degraded", age > 30)
+                self.assertTrue(result["required_evidence_complete"])
+
+    def test_missing_candle_cannot_report_healthy(self):
+        sample = state(5)
+        sample.update(mode="PAPER_ONLY", pair="EUR/USD", risk_violations=0)
+        result = diagnose([run(5), run(20)], sample, NOW)
+        self.assertFalse(result["required_evidence_complete"])
+        self.assertNotEqual(result["operational_health"], "healthy")
+
+    def test_complete_recent_state_can_report_healthy(self):
+        sample = state(5)
+        sample.update(
+            mode="PAPER_ONLY", pair="EUR/USD", risk_violations=0,
+            last_candle_at=(NOW - dt.timedelta(minutes=5)).isoformat(),
+        )
+        result = diagnose([run(5), run(20)], sample, NOW)
+        self.assertTrue(result["required_evidence_complete"])
+        self.assertEqual(result["operational_health"], "healthy")
+
 if __name__ == "__main__":
     unittest.main()
