@@ -148,6 +148,8 @@ def diagnose(runs, state, now):
         report["anomalies"].append({"type": "unexpected_mode", "mode": state.get("mode")})
     if state.get("pair") not in (None, "EUR/USD"):
         report["anomalies"].append({"type": "unexpected_pair", "pair": state.get("pair")})
+    if state.get("risk_violations") is None:
+        report["anomalies"].append({"type": "missing_risk_violations"})
     if state.get("risk_violations") is not None and (
         type(state["risk_violations"]) not in (int, float)
         or state["risk_violations"] < 0
