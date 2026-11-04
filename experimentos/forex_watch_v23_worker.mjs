@@ -260,9 +260,66 @@ export async function runCheck(env, now=Date.now(), fetcher=fetch) {
   const delivery=await deliver(report,env,now,fetcher);
   return {report,delivery};
 }
+/**
+ * Ping an independent Healthchecks.io dead-man's-switch. The URL is a secret:
+ * NEVER log it, never publish it in the repository or HTTP responses.
+ * A successful ping proves THIS monitor completed its cycle; not that trading
+ * is profitable, risk controlled, or the underlying EUR/USD feed is fresh.
+ */
+export async function signalHeartbeat(env,success,fetcher=fetch) {
+  const secret=env.MONITOR_HEARTBEAT_URL;
+  if(!secret) return {sent:false,reason:"heartbeat_not_configured"};
+  let parsed;
+  try { parsed=new URL(secret); }
+  catch { throw new Error("HEARTBEAT_URL_INVALID"); }
+  if(parsed.protocol!=="https:" || parsed.hostname!=="hc-ping.com" ||
+     parsed.username || parsed.password || parsed.port || parsed.search || parsed.hash ||
+     !/^\\/[0-9a-fA-F-]{36}\\/?$/.test(parsed.pathname)) {
+    throw new Error("HEARTBEAT_URL_INVALID");
+  }
+  const target=parsed.href.replace(/\\/$/,"")+(success?"":"/fail");
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
+  try {
+    const response=await fetcher(target,{method:"POST",cache:"no-store",
+      headers:{"User-Agent":"Forex-Watch-V2.3-heartbeat"},signal:controller.signal});
+    if(!response.ok) throw new Error("HEARTBEAT_HTTP_"+response.status);
+    return {sent:true,success};
+  } finally { clearTimeout(timer); }
+}
+/**
+ * A cycle must signal /fail when an alert could not be delivered or the public
+ * sources were unreachable. In active mode heartbeat configuration is required.
+ * Exposed for deterministic offline testing only, never via public HTTP.
+ */
+export async function scheduledCheck(env,now=Date.now(),fetcher=fetch) {
+  let failure=null,report=null,notification=null;
+  try {
+    if(env.ALERT_MODE==="active" && !env.MONITOR_HEARTBEAT_URL)
+      throw new Error("HEARTBEAT_NOT_CONFIGURED");
+    const result=await runCheck(env,now,fetcher);
+    report=result.report;
+    notification=result.delivery;
+    if(report.status==="INDETERMINADO")
+      throw new Error("MONITOR_DATA_UNAVAILABLE");
+  } catch(error) {
+    failure=error;
+    console.error("WATCH_CYCLE_FAILED",String(error?.message||"Unknown error").slice(0,160));
+  }
+  try {
+    const ping=await signalHeartbeat(env,!failure,fetcher);
+    if(!ping.sent && env.ALERT_MODE==="active")
+      throw new Error("HEARTBEAT_NOT_CONFIGURED");
+  } catch(error) {
+    if(!failure) failure=error;
+    console.error("HEARTBEAT_DELIVERY_FAILED",String(error?.message||"Unknown error").slice(0,100));
+  }
+  if(failure) throw new Error("WATCH_CYCLE_FAILED");
+  return {report,notification};
+}
 export default {
   async scheduled(controller,env,ctx) {
-    ctx.waitUntil(runCheck(env,controller.scheduledTime||Date.now()));
+    ctx.waitUntil(scheduledCheck(env,controller.scheduledTime||Date.now()));
   },
   async fetch() {
     // No public endpoint exposing health / Telegram tokens.
