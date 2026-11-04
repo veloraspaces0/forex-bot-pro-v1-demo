@@ -575,5 +575,36 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         self.assertIn("no_valid_scheduled_runs", {a["type"] for a in result["anomalies"]})
         self.assertIsNone(result["max_recent_dispatch_offset_minutes"])
 
+
+    def test_one_hundred_schedule_cases_with_exact_coverage(self):
+        # 100 independently evaluated cases: four full quarter-hour cycles
+        # plus boundaries across hours, including expected cron slots.
+        for minute_offset in range(100):
+            with self.subTest(case=minute_offset):
+                stamp = NOW - dt.timedelta(minutes=minute_offset)
+                r = run(minute_offset)
+                r["created_at"] = stamp.isoformat()
+                report = diagnose([r], state(5), NOW)
+                expected = round((((stamp.minute - 7) % 15) * 60 + stamp.second) / 60, 2)
+                self.assertEqual(report["max_dispatch_offset_minutes"], expected)
+                self.assertEqual(report["schedule_dispatch_offsets_minutes"], [expected])
+                self.assertEqual(report["recent_dispatch_sample_count"], 1)
+                self.assertEqual(report["recent_scheduled_runs"], 1)
+                self.assertEqual(report["last_run_age_minutes"], float(minute_offset))
+
+    def test_missing_queue_start_is_not_zero_delay_evidence(self):
+        report = diagnose([run(5)], state(5), NOW)
+        self.assertEqual(report["queue_delay_sample_count"], 0)
+        self.assertEqual(report["queue_delay_missing_count"], 1)
+        self.assertIsNone(report["max_queue_delay_minutes"])
+
+    def test_queue_coverage_counts_mixed_runs(self):
+        started = run(5)
+        started["run_started_at"] = started["created_at"]
+        report = diagnose([started, run(20)], state(5), NOW)
+        self.assertEqual(report["queue_delay_sample_count"], 1)
+        self.assertEqual(report["queue_delay_missing_count"], 1)
+        self.assertEqual(report["max_queue_delay_minutes"], 0.0)
+
 if __name__ == "__main__":
     unittest.main()
