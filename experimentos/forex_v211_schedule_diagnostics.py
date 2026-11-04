@@ -29,6 +29,8 @@ def fetch_json(url, attempts=3):
     if url.startswith(f"https://api.github.com/repos/{REPO}/") and os.getenv("GITHUB_TOKEN"):
         headers["Authorization"] = "Bearer " + os.environ["GITHUB_TOKEN"]
     request = urllib.request.Request(url, headers=headers)
+    if type(attempts) is not int or not 1 <= attempts <= 5:
+        raise ValueError("attempts must be between 1 and 5")
     for attempt in range(attempts):
         try:
             with urllib.request.urlopen(request, timeout=15) as response:
@@ -42,8 +44,10 @@ def fetch_json(url, attempts=3):
             delay = min(8, 2 ** attempt)
             if retry_after is not None:
                 try:
-                    delay = min(8, max(delay, float(retry_after)))
-                except ValueError:
+                    value = float(retry_after)
+                    if 0 <= value < float("inf"):
+                        delay = min(8, max(delay, value))
+                except (ValueError, OverflowError):
                     pass
             time.sleep(delay)
         except (urllib.error.URLError, TimeoutError):
@@ -153,8 +157,9 @@ def diagnose(runs, state, now):
             report["anomalies"].append({"type": "inconsistent_run_status", "run": r.get("html_url")})
         if r.get("status") in ("queued", "in_progress", "waiting", "pending", "requested"):
             if (now - created).total_seconds() > 20 * 60:
-                report["anomalies"].append({"type": "run_not_completed", "run": r.get("html_url"),
-                                            "status": r["status"]})
+                target = "anomalies" if created >= recent_cutoff else "historical_anomalies"
+                report[target].append({"type": "run_not_completed", "run": r.get("html_url"),
+                                       "status": r["status"]})
         if r.get("status") == "completed" and r.get("conclusion") is None:
             report["anomalies"].append({"type": "missing_run_conclusion", "run": r.get("html_url")})
         if r.get("conclusion") in ("failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale", "skipped"):
@@ -197,7 +202,7 @@ def diagnose(runs, state, now):
         or state["risk_violations"] < 0
     ):
         report["anomalies"].append({"type": "invalid_risk_violations"})
-    if type(state.get("risk_violations")) in (int, float) and state["risk_violations"] > 0:
+    if type(state.get("risk_violations")) is int and state["risk_violations"] > 0:
         report["anomalies"].append({"type": "risk_violations", "count": state["risk_violations"]})
     if state.get("open_position") is True and state.get("position_side") not in ("BUY", "SELL"):
         report["anomalies"].append({"type": "invalid_position_side"})
