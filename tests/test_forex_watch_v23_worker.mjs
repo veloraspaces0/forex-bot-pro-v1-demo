@@ -354,6 +354,20 @@ test("telegram outage sends heartbeat /fail as fallback when active",async()=>{
   assert.ok(!store.records.has("forex-watch-v23-incident"));
 });
 
+test("public dashboard history self-consistency detects counter and PnL corruption",()=>{
+  const cases=[
+    {closed_trades:2},{wins:2},{losses:2},{closed_results:[]},
+    {equity_curve:[{n:0,balance:100}]},
+    {equity_curve:[{n:1,balance:95}]},
+    {pnl_total:-9.0}
+  ];
+  for(const changed of cases) {
+    const out=assess(state(4,20,false,NOW,changed),runs(),NOW);
+    assert.equal(out.status,"CRITICO");
+    assert.ok(codes(out).includes("PUBLIC_HISTORY_INCONSISTENT"),JSON.stringify(changed));
+  }
+});
+
 test("public risk violations always require a critical alarm",()=>{
   const r=assess(state(4,20,false,NOW,{risk_violations:1}),runs(),NOW);
   assert.equal(r.status,"CRITICO");
