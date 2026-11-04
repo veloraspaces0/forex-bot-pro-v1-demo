@@ -64,3 +64,16 @@ Documentação Cloudflare:
 - https://developers.cloudflare.com/workers/configuration/cron-triggers/
 - https://developers.cloudflare.com/workers/runtime-apis/handlers/scheduled/
 - https://developers.cloudflare.com/kv/get-started/
+
+## Hardening pós-auditoria (branch `hardening-forex-watch-v23-20261104`)
+
+- Na camada externa, buscar execuções **apenas** do workflow `.github/workflows/forex-v2.yml`, pelo endpoint GitHub `actions/workflows/forex-v2.yml/runs?branch=main`. Isso evita confundir Page builds com execuções do robô.
+- `ALERT_MODE = "observe"` é o padrão seguro no modelo Wrangler. Nesse modo **não há envio de Telegram**. Para ativar em uma conta Cloudflare, alterar explicitamente para `active` e configurar `INCIDENT_KV`, `TELEGRAM_BOT_TOKEN` e `TELEGRAM_CHAT_ID`. Sem esses valores em modo `active`, o Cron falha com `ALERT_CHANNEL_NOT_CONFIGURED` em vez de fingir que enviou notificações.
+- Em `active`, se o KV não puder ser lido durante um incidente, o monitor tenta enviar Telegram mesmo assim (**pode repetir alertas**, preferível ao silêncio). Se Telegram falhar, não registra o incidente como entregue. Verifica o JSON de sucesso `ok: true`, não só o HTTP 200.
+- Recuperação exige **duas observações OK em horários distintos**, pelo menos 10 minutos separadas, com `last_checked_at` diferente. A recuperação não é enviada quando o KV fica inacessível.
+- Base64/JSON inválido do estado público gera `INDETERMINADO` com código diagnóstico específico (não prova falha do robô).
+- Deduplicação KV continua **best effort e não transacional**. Workers concorrentes podem mandar mensagens duplicadas. Para *exactly-once* forte, desenhar Durable Objects e testes de simultaneidade antes de declarar garantia.
+- GitHub e Telegram continuam dependências externas; o monitor alerta apenas sobre o estado **PAPER ONLY**, não executa stop nem operação real.
+- Sem uma conta externa configurada e teste real de entrega, esse código é **protótipo, não watchdog ativo**.
+
+Os testes são automatizados pelo workflow de CI da branch de hardening, mas a aprovação depende de verificar o resultado da execução mais recente **após** todas as alterações. Nenhuma mudança em `main`, `v2/state.enc` ou `v2/state.json`.
