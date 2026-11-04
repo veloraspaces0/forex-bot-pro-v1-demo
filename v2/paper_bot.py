@@ -3,6 +3,7 @@
 import json
 import math
 import os
+import ssl
 import time
 import urllib.error
 import urllib.parse
@@ -57,6 +58,10 @@ def validate_state(s):
     if s.get('position') is not None and not isinstance(s['position'], dict):
         raise ValueError('Invalid paper state position')
     s.setdefault('gap_halt', False)  # non-disruptive migration from V2
+    s.setdefault('status', 'unknown')
+    s.setdefault('message', '')
+    if not isinstance(s['gap_halt'], bool) or not isinstance(s['status'], str) or not isinstance(s['message'], str):
+        raise ValueError('Invalid paper state flags/status')
     return s
 
 def load():
@@ -99,6 +104,8 @@ def _parse_payload(payload):
     return [result[k] for k in sorted(result)]
 
 def api(key, retries=3, sleep=time.sleep):
+    if not isinstance(retries, int) or retries < 1:
+        raise ValueError('retries must be a positive integer')
     if not key:
         raise DataFeedError('provider_key_missing')
     query = urllib.parse.urlencode(dict(symbol='EUR/USD', interval='15min', timezone='UTC',
@@ -109,11 +116,22 @@ def api(key, retries=3, sleep=time.sleep):
         try:
             with urllib.request.urlopen(req, timeout=25) as response:
                 payload = json.loads(response.read(1_000_000))
+            if isinstance(payload, dict) and payload.get('status') == 'error':
+                try:
+                    provider_code = int(payload.get('code'))
+                except (ValueError, TypeError):
+                    provider_code = 0
+                if provider_code in RETRY_STATUS or provider_code >= 500:
+                    if attempt == retries - 1:
+                        raise DataFeedError('provider_status_' + str(provider_code))
+                    sleep(min(8, 2 ** (attempt + 1)))
+                    continue
+                raise DataFeedError('provider_status_' + str(provider_code))
             return _parse_payload(payload)
         except urllib.error.HTTPError as exc:
             err = 'provider_http_' + str(exc.code)
             transient = exc.code in RETRY_STATUS
-        except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+        except (urllib.error.URLError, ssl.SSLError, TimeoutError, ConnectionError) as exc:
             err, transient = 'provider_network_error', True
         except (ValueError, UnicodeError) as exc:
             # Malformed JSON is treated as transient but never used as market data.
@@ -191,7 +209,10 @@ def signal(bars):
     return None
 
 def enter(s, side, quote, clock):
-    if s['position'] is not None or side not in ('BUY','SELL') or s.get('gap_halt'): return
+    if s.get('gap_halt'):
+        note(s,stamp(clock),'ENTRY_BLOCKED_BY_GAP_HALT')
+        return
+    if s['position'] is not None or side not in ('BUY','SELL'): return
     volatility = atr(s['candles'])
     available = min(s['balance'], equity(s, quote))
     if not volatility or not math.isfinite(quote) or quote <= 0 or available <= 0: return
@@ -202,8 +223,9 @@ def enter(s, side, quote, clock):
     if units < 1: return
     stop = entry+(-distance if side=='BUY' else distance)
     target = entry+(2*distance if side=='BUY' else -2*distance)
-    start = date(clock).replace(minute=clock.minute//15*15,second=0,microsecond=0)
-    if start < clock: start += STEP
+    clock = date(clock)
+    start = clock.replace(minute=clock.minute//15*15,second=0,microsecond=0) + STEP
+    # Conservative even at the exact bar boundary: never inspect an opening bar's full OHLC.
     s['position'] = dict(side=side, entry_at=stamp(clock),signal_bar=s['last_bar'],
         first_exit_bar=stamp(start), entry=round(entry,6),stop=round(stop,6),
         target=round(target,6),units=units,planned_risk_usd=round(units*distance,4))
