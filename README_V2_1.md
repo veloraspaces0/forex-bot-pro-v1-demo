@@ -44,3 +44,12 @@ A nova suíte usa respostas de API falsas, sem internet. Inclui retry 429, HTTP 
 5. Reexecutar auditoria independente e testes prospectivos antes de pensar em qualquer execução real.
 
 **Não mescle o arquivo `v2/state.enc` nem `v2/state.json` da branch no repositório principal:** o estado da main evolui automaticamente. Ao mesclar, selecionar apenas código/testes/docs e proteger o estado vivo.
+
+## Consolidação pós-reauditoria (ainda candidata, sem mexer na main)
+
+- Testes offline adicionais em `tests/test_v21_consolidation.py` cobrem a migração sintética V2→V2.1 com **ciphertext gerado pelo formato original da V2**, idempotência com crescimento da série e repetição, limite diário com caso positivo e negativo, aproximação do orçamento de risco, borda de 15min, erros `HTTP 200 / status:error`, TLS e recuperação manual fail-closed.
+- A **compatibilidade do estado real de produção ainda exige prova privada**; uma fixture V2 sintética não é decifragem do estado operacional real.
+- Novo utilitário `v2/recover_gap.py` opera **offline, em cópia local**, dry-run por padrão, e exige backup novo externo ao repositório, motivo, reconhecimento de perda de continuidade e 40 candles recentes consecutivos para pular um gap sem criar trades. Ele **recusa posição aberta**. **Não realiza push GitHub nem limpa gap_halt automaticamente**.
+- O painel público passa a incluir `planned_risk_usd` e `risk_exceeded` por operação, além do contador geral. Dados privados de OHLC não são publicados.
+- Em `enter()`, se `gap_halt` impedir entrada, um evento explícito é registrado. A primeira barra elegível para saída será sempre **posterior** ao candle em que a entrada ocorreu (inclusive em entrada exatamente no limite de 15min).
+- Critério e procedimento de recuperação/promoção com cópias privadas: ver `RECUPERACAO_E_PROMOCAO_V21.md`.
