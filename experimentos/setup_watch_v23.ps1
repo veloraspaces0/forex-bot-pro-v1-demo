@@ -27,7 +27,7 @@ $PublishedActive = $false
 
 function Invoke-Wrangler {
   param([string[]]$CommandArgs)
-  & npx.cmd --yes wrangler@4 @CommandArgs
+  & npx.cmd --yes wrangler@4.157.0 @CommandArgs
   if ($LASTEXITCODE -ne 0) {
     throw "Falha no Wrangler ao executar: $($CommandArgs[0]) $($CommandArgs[1])"
   }
