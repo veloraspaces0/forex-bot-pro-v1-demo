@@ -70,19 +70,22 @@ test("no KV or Telegram => no notifications",async()=>{
   const r=await deliver({status:"CRITICO",issues:[{code:"DATA_GAP",message:"gap"}]}, {},NOW,async (...a)=>{alerts.push(a);return new Response("ok")});
   assert.equal(r.notified,false);assert.equal(alerts.length,0);
 });
-test("delivery: alert once, suppress repeat, recovery once",async()=>{
+test("delivery: one alert, second healthy observation needed for recovery",async()=>{
   const records=new Map(),notify=[];
   const KV={get:async k=>records.get(k)??null,
     put:async(k,v)=>{records.set(k,v)},delete:async k=>records.delete(k)};
-  const env={INCIDENT_KV:KV,TELEGRAM_BOT_TOKEN:"TEST_ONLY",TELEGRAM_CHAT_ID:"TEST_CHAT"};
+  const env={ALERT_MODE:"active",INCIDENT_KV:KV,TELEGRAM_BOT_TOKEN:"TEST_ONLY",TELEGRAM_CHAT_ID:"TEST_CHAT"};
   const fetcher=async url=>{notify.push(String(url));return new Response(JSON.stringify({ok:true}),{status:200})};
   const bad={status:"CRITICO",issues:[{severity:"CRITICO",code:"DATA_GAP",message:"gap"}],
     balance:99.5,openPosition:true,checkedAt:stamp(20)};
   assert.equal((await deliver(bad,env,NOW,fetcher)).notified,true);
   assert.equal((await deliver(bad,env,NOW+15*60000,fetcher)).notified,false);
-  const good={status:"OK",issues:[]};
-  assert.equal((await deliver(good,env,NOW+30*60000,fetcher)).recovery,true);
-  assert.equal((await deliver(good,env,NOW+45*60000,fetcher)).notified,false);
+  const first={status:"OK",issues:[],checkedAt:stamp(-29)};
+  assert.equal((await deliver(first,env,NOW+30*60000,fetcher)).notified,false);
+  assert.equal((await deliver(first,env,NOW+45*60000,fetcher)).notified,false);
+  const second={status:"OK",issues:[],checkedAt:stamp(-44)};
+  assert.equal((await deliver(second,env,NOW+45*60000,fetcher)).recovery,true);
+  assert.equal((await deliver(second,env,NOW+60*60000,fetcher)).notified,false);
   assert.equal(notify.length,2);
 });
 test("live read-only GitHub fetch and NOT encrypted state",async()=>{
@@ -107,4 +110,126 @@ test("upstream GitHub outage => INDETERMINADO, not bot failed",async()=>{
   assert.equal(out.report.status,"INDETERMINADO");
   assert.ok(codes(out.report).includes("MONITOR_UNAVAILABLE"));
   assert.ok(count>0);
+});
+
+
+function activeEnv(KV) {
+  return {ALERT_MODE:"active",INCIDENT_KV:KV,
+    TELEGRAM_BOT_TOKEN:"TEST_ONLY",TELEGRAM_CHAT_ID:"TEST_CHAT"};
+}
+function memoryKV() {
+  const records=new Map();
+  return {records, get:async k=>records.get(k)||null,
+    put:async(k,v)=>{records.set(k,v)},delete:async k=>{records.delete(k)}};
+}
+function critical(runId=1) {
+  return {status:"CRITICO",issues:[{severity:"CRITICO",code:"RUN_FAILED",message:"run failed"}],
+    lastRunId:runId,checkedAt:stamp(4),openPosition:true,balance:99.5};
+}
+const telegramOk=async()=>new Response('{"ok":true}',{status:200});
+test("production active mode refuses missing alert channel",async()=>{
+  await assert.rejects(deliver(critical(),{ALERT_MODE:"active"},NOW,telegramOk),
+    /ALERT_CHANNEL_NOT_CONFIGURED/);
+});
+test("KV read failure does not silence a CRITICO incident",async()=>{
+  let sent=0;
+  const KV={get:async()=>{throw Error("KV unavailable")},
+    put:async()=>{throw Error("KV unavailable")},delete:async()=>{}};
+  const out=await deliver(critical(),activeEnv(KV),NOW,async()=>{sent++;return telegramOk()});
+  assert.equal(out.notified,true);
+  assert.equal(out.storeDegraded,true);
+  assert.equal(sent,1);
+});
+test("Telegram 503 must NOT persist a fake sent notification",async()=>{
+  const store=memoryKV();
+  await assert.rejects(deliver(critical(),activeEnv(store),NOW,
+    async()=>new Response('{"ok":false}',{status:503})), /TELEGRAM_HTTP_503/);
+  assert.equal(store.records.size,0);
+  assert.equal((await deliver(critical(),activeEnv(store),NOW+60000,telegramOk)).notified,true);
+});
+test("Telegram 200 ok:false is also a failed delivery",async()=>{
+  const store=memoryKV();
+  await assert.rejects(deliver(critical(),activeEnv(store),NOW,
+    async()=>new Response('{"ok":false}',{status:200})),/TELEGRAM_REJECTED/);
+  assert.equal(store.records.size,0);
+});
+test("KV write failure after Telegram success permits duplicate, not silence",async()=>{
+  let sends=0;
+  const KV={get:async()=>null, put:async()=>{throw Error("KV down")}, delete:async()=>{}};
+  for(let i=0;i<2;i++) {
+    const out=await deliver(critical(),activeEnv(KV),NOW+i*60000,
+      async()=>{sends++;return telegramOk()});
+    assert.equal(out.notified,true);
+  }
+  assert.equal(sends,2);
+});
+test("different failed workflow run must bypass incident dedupe",async()=>{
+  const store=memoryKV(),env=activeEnv(store);
+  let sends=0;
+  const sender=async()=>{sends++;return telegramOk()};
+  assert.equal((await deliver(critical(100),env,NOW,sender)).notified,true);
+  assert.equal((await deliver(critical(100),env,NOW+1000,sender)).notified,false);
+  assert.equal((await deliver(critical(101),env,NOW+2000,sender)).notified,true);
+  assert.equal(sends,2);
+});
+test("KV unreachable must NOT emit a recovery notification",async()=>{
+  let sends=0;
+  const KV={get:async()=>{throw Error("KV down")}, put:async()=>{},delete:async()=>{}};
+  const env=activeEnv(KV);
+  const ok={status:"OK",issues:[],checkedAt:stamp(2)};
+  const result=await deliver(ok,env,NOW,async()=>{sends++;return telegramOk()});
+  assert.equal(result.notified,false);
+  assert.equal(sends,0);
+});
+test("corrupt GitHub public base64 classified as INDETERMINADO",async()=>{
+  const fake=async url=>new Response(JSON.stringify(
+    String(url).includes("/contents/")?
+      {encoding:"base64",content:"!!!corrupt!!!"}:{workflow_runs:runs()}),{status:200});
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("STATE_BASE64_OR_JSON_INVALID"));
+});
+test("workflow-scoped endpoint excludes unrelated Actions runs",async()=>{
+  const urls=[];
+  const fake=async url=>{
+    urls.push(String(url));
+    const body=String(url).includes("/contents/")
+      ? {encoding:"base64",content:Buffer.from(JSON.stringify(state())).toString("base64")}
+      : {workflow_runs:runs()};
+    return new Response(JSON.stringify(body),{status:200});
+  };
+  await readPublic(NOW,fake);
+  assert.ok(urls.some(x=>x.includes("/actions/workflows/forex-v2.yml/runs?branch=main")));
+  assert.ok(!urls.some(x=>x.includes("/actions/runs?branch=main")));
+});
+test("HTTP 429 upstream retried once with no false bot failure",async()=>{
+  const calls=new Map();
+  const fake=async url=>{
+    const key=String(url),count=(calls.get(key)||0)+1;calls.set(key,count);
+    if(count===1)return new Response('{"error":"rate limited"}',{status:429});
+    return new Response(JSON.stringify(key.includes("/contents/")
+      ?{encoding:"base64",content:Buffer.from(JSON.stringify(state())).toString("base64")}
+      :{workflow_runs:runs()}),{status:200});
+  };
+  const out=await readPublic(NOW,fake);
+  assert.equal(out.status,"OK");
+  assert.deepEqual([...calls.values()].sort(),[2,2]);
+});
+test("older than 90min no workflow detected as critical",()=>{
+  const r=assess(state(90,90),runs([90,105,120,135]),NOW);
+  assert.equal(r.status,"CRITICO");
+  assert.ok(codes(r).includes("SCHEDULE_MISSING"));
+});
+test("bad public JSON response yields INDETERMINADO not fake OK",async()=>{
+  const bad=async url=>new Response(String(url).includes("/contents/")?"{bad json":"{}",{status:200});
+  const out=await runCheck({},NOW,bad);
+  assert.equal(out.report.status,"INDETERMINADO");
+});
+test("KV compare-and-set absent: concurrent runs MAY duplicate, not exactly once",async()=>{
+  const store=memoryKV(),env=activeEnv(store);
+  let sends=0;
+  const sender=async()=>{sends++;return telegramOk()};
+  await Promise.all([deliver(critical(),env,NOW,sender),deliver(critical(),env,NOW,sender)]);
+  assert.ok(sends>=1);
+  // KV is eventually consistent; no claim of exactly-once delivery.
 });
