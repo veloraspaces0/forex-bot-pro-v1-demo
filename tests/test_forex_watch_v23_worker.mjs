@@ -233,3 +233,11 @@ test("KV compare-and-set absent: concurrent runs MAY duplicate, not exactly once
   assert.ok(sends>=1);
   // KV is eventually consistent; no claim of exactly-once delivery.
 });
+
+test("unknown in-progress start cannot be misdiagnosed as a stuck process",()=>{
+  const rr=runs([65,80,95,110]);
+  rr[0].status="in_progress";rr[0].conclusion=null;delete rr[0].run_started_at;
+  const out=assess(state(),rr,NOW);
+  assert.ok(codes(out).includes("RUN_START_UNKNOWN"));
+  assert.ok(!codes(out).includes("RUN_STUCK"));
+});
