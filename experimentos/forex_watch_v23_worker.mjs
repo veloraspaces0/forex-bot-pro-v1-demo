@@ -125,6 +125,15 @@ export function assess(state, runs, now) {
   if (state.status === "api_error")
     flag(opened || (stateAge !== null && stateAge > 30) ? "CRITICO" : "ATENCAO",
          "API_ERROR", "Estado público registra erro da API.");
+  if (state.status === "awaiting_api_key")
+    flag("CRITICO", "API_CREDENTIAL_MISSING",
+         "Motor PAPER informa ausência da credencial da fonte de dados.");
+  else if (state.status === "market_closed_or_stale" && !closed && !sundayGrace(now))
+    flag(opened ? "CRITICO" : "ATENCAO","MARKET_DATA_NOT_FRESH",
+         "Motor informou preço de mercado não atualizado durante sessão regular.");
+  else if (!["monitoring","market_closed_or_stale","awaiting_api_key",
+               "api_error","data_gap","gap_halt"].includes(state.status))
+    flag("ATENCAO","UNRECOGNIZED_BOT_STATUS","Estado público apresenta status não reconhecido.");
   const schedules = matching.filter(x => x.event === "schedule");
   const gaps = [];
   for (let i=0; i<Math.min(4, schedules.length-1); i++)
