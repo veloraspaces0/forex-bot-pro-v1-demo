@@ -189,33 +189,41 @@ export function assess(state, runs, now) {
     lastRunId:latest?.id || null, recentFailedRunId:recentFailedRun?.id || null,
     source:"PUBLIC_GITHUB_ONLY"};
 }
-async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setTimeout(resolve,ms))) {
+async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setTimeout(resolve,ms)), token=null) {
+  const resource=url.includes("/contents/")?"STATE":"RUNS";
   for (let n=0; n<FETCH_ATTEMPTS; n++) {
     const controller = new AbortController();
     const timer = setTimeout(()=>controller.abort(),FETCH_TIMEOUT_MS);
     try {
-      const response = await fetcher(url,{headers:{"Accept":"application/vnd.github+json",
-        "User-Agent":"Forex-Watch-V2.3","Cache-Control":"no-cache"},
-        cache:"no-store",signal:controller.signal});
+      const headers={"Accept":"application/vnd.github+json",
+        "User-Agent":"Forex-Watch-V2.3.1","Cache-Control":"no-cache"};
+      // Optional read-only repository credential, configured as Cloudflare secret.
+      if(token) headers.Authorization="Bearer "+token;
+      const response = await fetcher(url,{headers,cache:"no-store",signal:controller.signal});
       if (!response.ok) {
-        const err = new Error("GitHub API HTTP "+response.status);
+        const err = new Error("GITHUB_"+resource+"_HTTP_"+response.status);
         if (!RETRY_CODES.has(response.status) || n===FETCH_ATTEMPTS-1) throw err;
       } else {
         const body=await response.text();
-        if (body.length>MAX_API_BYTES) throw new Error("GitHub response too large");
-        return JSON.parse(body);
+        if (body.length>MAX_API_BYTES) throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
+        try { return JSON.parse(body); }
+        catch(error) { throw new Error("GITHUB_"+resource+"_INVALID_JSON"); }
       }
     } catch(error) {
-      if (n===FETCH_ATTEMPTS-1 || /HTTP (401|403|404)/.test(String(error.message))) throw error;
+      const message=String(error?.message||"");
+      const code=error?.name==="AbortError"?"GITHUB_"+resource+"_TIMEOUT":
+        /^GITHUB_/.test(message)?message:"GITHUB_"+resource+"_NETWORK_ERROR";
+      if(n===FETCH_ATTEMPTS-1 || /HTTP_(401|403|404)|INVALID_JSON|RESPONSE_TOO_LARGE/.test(code))
+        throw new Error(code);
     } finally { clearTimeout(timer); }
     await pause(1000);
   }
-  throw new Error("GitHub API unavailable");
+  throw new Error("GITHUB_"+resource+"_NETWORK_ERROR");
 }
-export async function readPublic(now=Date.now(), fetcher=fetch) {
+export async function readPublic(now=Date.now(), fetcher=fetch, token=null) {
   const [raw, data] = await Promise.all([
-    getJson(ENDPOINT+"/contents/v2/state.json?ref=main",fetcher),
-    getJson(ENDPOINT+"/actions/workflows/"+MONITOR_WORKFLOW+"/runs?branch=main&per_page=100",fetcher),
+    getJson(ENDPOINT+"/contents/v2/state.json?ref=main",fetcher,undefined,token),
+    getJson(ENDPOINT+"/actions/workflows/"+MONITOR_WORKFLOW+"/runs?branch=main&per_page=20",fetcher,undefined,token),
   ]);
   if (raw.encoding !== "base64" || typeof raw.content !== "string")
     throw new Error("GitHub state file format invalid");
@@ -244,7 +252,8 @@ function incidentFingerprint(report) {
 function alertText(report) {
   const url = "https://github.com/" + GITHUB_REPO + "/actions";
   const event = report.status === "INDETERMINADO"
-    ? "Falha de consulta ao GitHub; situação do bot NÃO confirmada."
+    ? "Falha de consulta ao GitHub; situação do bot NÃO confirmada.\nMotivo: "+
+      String(report.issues?.[0]?.code||"MONITOR_UNAVAILABLE")
     : report.issues.map(x=>x.code + ": " + x.message).join("\n");
   return ["Forex Watch V2.3 — "+report.status,event,
     "Posição paper: "+String(report.openPosition??"desconhecida"),
@@ -415,14 +424,18 @@ export async function assessContinuity(report,env,now=Date.now()) {
 export async function runCheck(env, now=Date.now(), fetcher=fetch) {
   let report;
   try {
-    report=await readPublic(now,fetcher);
+    report=await readPublic(now,fetcher,env?.GITHUB_READ_TOKEN||null);
     await assessContinuity(report,env,now);
   } catch(error) {
-    const code=String(error.message).includes("STATE_BASE64_OR_JSON_INVALID")?
-      "STATE_BASE64_OR_JSON_INVALID":"MONITOR_UNAVAILABLE";
+    const rawCode=String(error?.message||"");
+    const code=/^(GITHUB_(STATE|RUNS)_(HTTP_[0-9]{3}|RESPONSE_TOO_LARGE|INVALID_JSON|TIMEOUT|NETWORK_ERROR)|STATE_BASE64_OR_JSON_INVALID)$/.test(rawCode)
+      ? rawCode:rawCode==="GitHub state file format invalid"?"STATE_FILE_FORMAT_INVALID":
+        rawCode==="Missing GitHub workflow_runs"?"GITHUB_RUNS_MALFORMED":"MONITOR_UNAVAILABLE";
+    // Log only a controlled error code, never an HTTP body or credential.
+    console.error("WATCH_GITHUB_READ_FAILED",code);
     report={status:"INDETERMINADO",issues:[{
       code,severity:"INDETERMINADO",
-      message:"API GitHub indisponível ou resposta inválida; NÃO inferir falha do bot."}],
+      message:"Consulta GitHub falhou ("+code+"); situação do bot NÃO confirmada."}],
       checkedAt:null,openPosition:null,balance:null};
   }
   console.log(JSON.stringify({monitor:"Forex Watch V2.3",status:report.status,
