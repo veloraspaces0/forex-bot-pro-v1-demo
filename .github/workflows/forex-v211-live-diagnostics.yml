@@ -33,6 +33,7 @@ jobs:
           print(json.dumps({
               'checked_at_utc':r.get('checked_at_utc'),
               'operational_health':r.get('operational_health'),
+              'required_evidence_complete':r.get('required_evidence_complete'),
               'scheduled_runs':r.get('scheduled_runs'),
               'recent_scheduled_runs':r.get('recent_scheduled_runs'),
               'historical_scheduled_runs':r.get('historical_scheduled_runs'),
