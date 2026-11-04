@@ -114,6 +114,8 @@ def diagnose(runs, state, now):
         if r.get("status") in ("queued", "in_progress", "waiting", "pending", "requested"):
             report["anomalies"].append({"type": "run_not_completed", "run": r.get("html_url"),
                                         "status": r["status"]})
+        if r.get("status") == "completed" and r.get("conclusion") is None:
+            report["anomalies"].append({"type": "missing_run_conclusion", "run": r.get("html_url")})
         if r.get("conclusion") in ("failure", "cancelled", "timed_out", "action_required", "startup_failure", "stale", "skipped"):
             report["anomalies"].append({"type": "workflow_failure", "run": r["html_url"],
                                         "conclusion": r["conclusion"]})
