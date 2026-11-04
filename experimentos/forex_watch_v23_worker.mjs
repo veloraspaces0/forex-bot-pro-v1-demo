@@ -263,8 +263,7 @@ export async function readPublic(now=Date.now(), fetcher=fetch, token=null) {
         if(body.length>MAX_API_BYTES) throw new Error("GITHUB_STATE_RESPONSE_TOO_LARGE");
         let parsed;
         try { parsed=JSON.parse(body); } catch { throw new Error("GITHUB_STATE_INVALID_JSON"); }
-        return {encoding:"base64",content:btoa(String.fromCharCode(
-          ...new TextEncoder().encode(JSON.stringify(parsed))))};
+        return {encoding:"raw_json",content:parsed};
       }
     })(),
     getJson(ENDPOINT+"/actions/workflows/"+MONITOR_WORKFLOW+"/runs?branch=main&per_page=20",fetcher,undefined,token),
@@ -272,14 +271,18 @@ export async function readPublic(now=Date.now(), fetcher=fetch, token=null) {
   const failed=results.find(x=>x.status==="rejected");
   if(failed) throw failed.reason;
   const [raw,data]=results.map(x=>x.value);
-  if (raw.encoding !== "base64" || typeof raw.content !== "string")
+  if (!((raw.encoding === "base64" && typeof raw.content === "string") ||
+        (raw.encoding === "raw_json" && raw.content && typeof raw.content === "object")))
     throw new Error("GitHub state file format invalid");
   let state;
   try {
+    if(raw.encoding === "raw_json") state = raw.content;
+    else {
     const binary = atob(raw.content.replace(/\s/g,""));
     const decoded = new Uint8Array(binary.length);
     for (let i=0;i<binary.length;i++) decoded[i]=binary.charCodeAt(i);
     state = JSON.parse(new TextDecoder().decode(decoded));
+    }
   } catch(error) {
     throw new Error("STATE_BASE64_OR_JSON_INVALID");
   }
