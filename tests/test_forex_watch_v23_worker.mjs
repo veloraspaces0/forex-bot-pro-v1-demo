@@ -6,7 +6,8 @@ import {assess,fxMarketClosed,sundayGrace,minutesAgo,deliver,runCheck,readPublic
 const NOW=Date.parse("2026-11-04T16:00:00Z");
 const stamp=(mins,now=NOW)=>new Date(now-mins*60000).toISOString();
 const state=(updated=4,candle=20,opened=false,now=NOW,extra={})=>({
-  mode:"PAPER_ONLY",last_checked_at:stamp(updated,now),updated_at:stamp(updated,now),
+  mode:"PAPER_ONLY",pair:"EUR/USD",interval:"15min",risk_violations:0,
+  last_checked_at:stamp(updated,now),updated_at:stamp(updated,now),
   last_candle_at:stamp(candle,now),open_position:opened,position_side:opened?"SELL":null,
   status:"monitoring",gap_halt:false,balance:99.5,estimated_equity:99.45,closed_trades:1,...extra
 });
@@ -327,4 +328,43 @@ test("telegram outage sends heartbeat /fail as fallback when active",async()=>{
   await assert.rejects(scheduledCheck(env,NOW,fake),/WATCH_CYCLE_FAILED/);
   assert.ok(urls.some(u=>u.endsWith("/fail")));
   assert.equal(store.records.size,0);
+});
+
+test("public risk violations always require a critical alarm",()=>{
+  const r=assess(state(4,20,false,NOW,{risk_violations:1}),runs(),NOW);
+  assert.equal(r.status,"CRITICO");
+  assert.ok(codes(r).includes("RISK_VIOLATIONS"));
+});
+test("invalid or missing public state schema must fail closed",()=>{
+  for(const overrides of [
+    {mode:null},{pair:"GBP/USD"},{interval:null},{open_position:"false"},
+    {risk_violations:-1},{balance:Number.NaN},{closed_trades:-2}
+  ]) {
+    assert.throws(()=>assess(state(4,20,false,NOW,overrides),runs(),NOW),
+      /PUBLIC_STATE_SCHEMA_INVALID/);
+  }
+});
+test("a late Cron scheduledTime must use the actual invocation clock",async()=>{
+  // Simulate dispatch 50 minutes late, without any HTTP/network call.
+  const module=(await import("../experimentos/forex_watch_v23_worker.mjs")).default;
+  const realFetch=globalThis.fetch;
+  const now=Date.now();
+  const calls=[];
+  const fake=async(url)=>{
+    const path=String(url);calls.push(path);
+    return new Response(JSON.stringify(path.includes("/contents/")
+      ?{encoding:"base64",content:Buffer.from(JSON.stringify(state(4,20,false,now))).toString("base64")}
+      :{workflow_runs:runs([4,19,34,49,64],now)}),{status:200});
+  };
+  globalThis.fetch=fake;
+  let task=null;
+  try {
+    await module.scheduled({scheduledTime:now-50*60000},{ALERT_MODE:"observe"},
+      {waitUntil:promise=>{task=promise}});
+    assert.ok(task);
+    const result=await task;
+    assert.equal(result.report.status,"OK",
+      "Nominal scheduled time cannot make a fresh reading appear stale or younger");
+    assert.equal(calls.length,2);
+  } finally { globalThis.fetch=realFetch; }
 });
