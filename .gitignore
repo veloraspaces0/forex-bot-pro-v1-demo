@@ -6,3 +6,4 @@ v2/state.private.json.*
 __pycache__/
 *.pyc
 .pytest_cache/
+v2/*.tmp
