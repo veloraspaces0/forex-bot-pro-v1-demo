@@ -20,7 +20,10 @@ def fetch_json(url):
 
 def fetch_workflow_runs(base, max_pages=5):
     """Fetch bounded run history; fail closed if the API omits expected runs."""
+    if not isinstance(max_pages, int) or not 1 <= max_pages <= 20:
+        raise ValueError("max_pages must be between 1 and 20")
     all_runs = []
+    seen_ids = set()
     expected = None
     for page in range(1, max_pages + 1):
         payload = fetch_json(
@@ -30,10 +33,20 @@ def fetch_workflow_runs(base, max_pages=5):
             raise ValueError("Invalid workflow_runs API payload")
         if not isinstance(payload.get("total_count"), int):
             raise ValueError("Missing total_count in workflow_runs API payload")
+        if payload["total_count"] < 0:
+            raise ValueError("Invalid negative total_count")
         if expected is None:
             expected = payload["total_count"]
         batch = payload["workflow_runs"]
-        all_runs.extend(batch)
+        for item in batch:
+            if not isinstance(item, dict):
+                raise ValueError("Invalid workflow run entry")
+            identifier = item.get("id")
+            if identifier is not None:
+                if identifier in seen_ids:
+                    continue
+                seen_ids.add(identifier)
+            all_runs.append(item)
         if len(batch) < 100 or len(all_runs) >= expected:
             break
     return {"workflow_runs": all_runs, "total_count": expected,
