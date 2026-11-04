@@ -40,7 +40,13 @@ export function sundayGrace(now) {
 }
 export function assess(state, runs, now) {
   if (!state || typeof state !== "object" || !Array.isArray(runs)) throw new Error("Bad public JSON");
-  if (state.mode && state.mode !== "PAPER_ONLY") throw new Error("Non-paper state");
+  if (state.mode !== "PAPER_ONLY" || state.pair !== "EUR/USD" ||
+      state.interval !== "15min" || typeof state.open_position !== "boolean" ||
+      !Number.isInteger(state.closed_trades) || state.closed_trades < 0 ||
+      !Number.isInteger(state.risk_violations) || state.risk_violations < 0 ||
+      !Number.isFinite(state.balance) || !Number.isFinite(state.estimated_equity)) {
+    throw new Error("PUBLIC_STATE_SCHEMA_INVALID");
+  }
   const issues = [];
   const flag = (severity, code, message) => issues.push({ severity, code, message });
   const matching = runs.filter(r => r && r.name === BOT_NAME && r.head_branch === "main")
@@ -86,6 +92,8 @@ export function assess(state, runs, now) {
   }
   if (state.gap_halt || ["data_gap", "gap_halt"].includes(state.status))
     flag("CRITICO", "DATA_GAP", "Parada por lacuna de candles.");
+  if (state.risk_violations > 0)
+    flag("CRITICO", "RISK_VIOLATIONS", "Histórico público indica violação do risco planejado.");
   if (state.status === "api_error")
     flag(opened || (stateAge !== null && stateAge > 30) ? "CRITICO" : "ATENCAO",
          "API_ERROR", "Estado público registra erro da API.");
@@ -322,7 +330,9 @@ export async function scheduledCheck(env,now=Date.now(),fetcher=fetch) {
 }
 export default {
   async scheduled(controller,env,ctx) {
-    ctx.waitUntil(scheduledCheck(env,controller.scheduledTime||Date.now()));
+    // Use ACTUAL invocation time. Cron scheduledTime is the nominal trigger time:
+    // delayed dispatch must not make the bot appear younger/healthier.
+    ctx.waitUntil(scheduledCheck(env,Date.now()));
   },
   async fetch() {
     // No public endpoint exposing health / Telegram tokens.
