@@ -131,11 +131,21 @@ def diagnose(runs, state, now):
         report["anomalies"].append({"type": "no_scheduled_runs_in_response"})
     if state.get("open_position") not in (True, False):
         report["anomalies"].append({"type": "invalid_open_position_flag"})
+    if state.get("mode") is None:
+        report["anomalies"].append({"type": "missing_mode"})
+    if state.get("pair") is None:
+        report["anomalies"].append({"type": "missing_pair"})
     if state.get("mode") not in (None, "PAPER_ONLY"):
         report["anomalies"].append({"type": "unexpected_mode", "mode": state.get("mode")})
     if state.get("pair") not in (None, "EUR/USD"):
         report["anomalies"].append({"type": "unexpected_pair", "pair": state.get("pair")})
-    if isinstance(state.get("risk_violations"), (int, float)) and state["risk_violations"] > 0:
+    if state.get("risk_violations") is not None and (
+        type(state["risk_violations"]) not in (int, float)
+        or state["risk_violations"] < 0
+        or state["risk_violations"] != state["risk_violations"]
+    ):
+        report["anomalies"].append({"type": "invalid_risk_violations"})
+    if type(state.get("risk_violations")) in (int, float) and state["risk_violations"] > 0:
         report["anomalies"].append({"type": "risk_violations", "count": state["risk_violations"]})
     candle_at = state.get("last_candle_at")
     if candle_at:
