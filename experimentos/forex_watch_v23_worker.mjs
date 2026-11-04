@@ -14,9 +14,16 @@ const MONITOR_WORKFLOW = "forex-v2.yml";
 const RECOVERY_OBSERVATION_MINUTES = 10;
 const RETRY_CODES = new Set([429, 500, 502, 503, 504]);
 
+export function parseTimestamp(when) {
+  // Explicit offset is mandatory. Never use the runner's implicit local timezone.
+  if(typeof when!=="string" || !/(Z|[+-][0-9]{2}:[0-9]{2})$/i.test(when))
+    throw new Error("Timestamp missing explicit timezone");
+  const ms=Date.parse(when);
+  if(!Number.isFinite(ms)) throw new Error("Invalid UTC timestamp");
+  return ms;
+}
 export function minutesAgo(when, now) {
-  const then = Date.parse(when);
-  if (!Number.isFinite(then)) throw new Error("Invalid UTC timestamp");
+  const then = parseTimestamp(when);
   const age = (now - then) / 60000;
   if (age < -2) throw new Error("Future timestamp");
   return Math.max(0, Math.round(age * 100) / 100);
@@ -49,8 +56,10 @@ export function assess(state, runs, now) {
   }
   const issues = [];
   const flag = (severity, code, message) => issues.push({ severity, code, message });
-  const matching = runs.filter(r => r && r.name === BOT_NAME && r.head_branch === "main")
-    .sort((a,b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const matching = runs.filter(r => r && r.name === BOT_NAME && r.head_branch === "main");
+  // A malformed run can otherwise make cadence comparisons silently NaN.
+  for(const r of matching) parseTimestamp(r.created_at);
+  matching.sort((a,b) => parseTimestamp(b.created_at) - parseTimestamp(a.created_at));
   const latest = matching[0];
   const opened = state.open_position === true;
   let runAge = null;
