@@ -606,5 +606,42 @@ class ScheduleDiagnosticTests(unittest.TestCase):
         self.assertEqual(report["queue_delay_missing_count"], 1)
         self.assertEqual(report["max_queue_delay_minutes"], 0.0)
 
+
+    def test_one_hundred_queue_delay_cases_adversarial(self):
+        # 100 distinct delays spanning valid, slow, and invalid timestamps.
+        for delta_minutes in range(-25, 75):
+            with self.subTest(queue_delta=delta_minutes):
+                r = run(80)
+                r["run_started_at"] = (
+                    dt.datetime.fromisoformat(r["created_at"])
+                    + dt.timedelta(minutes=delta_minutes)
+                ).isoformat()
+                result = diagnose([r], state(5), NOW)
+                types = {a["type"] for a in result["anomalies"] + result["historical_anomalies"]}
+                if delta_minutes < 0:
+                    self.assertIn("inconsistent_run_timestamps", types)
+                    self.assertEqual(result["invalid_queue_timestamp_count"], 1)
+                    self.assertEqual(result["queue_delay_sample_count"], 0)
+                    self.assertIsNone(result["max_queue_delay_minutes"])
+                else:
+                    self.assertEqual(result["invalid_queue_timestamp_count"], 0)
+                    self.assertEqual(result["queue_delay_sample_count"], 1)
+                    self.assertEqual(result["queue_delay_coverage_pct"], 100.0)
+                    self.assertEqual(result["max_queue_delay_minutes"], float(delta_minutes))
+                    self.assertEqual("runner_queue_delay" in types, delta_minutes > 10)
+
+    def test_empty_history_queue_coverage_unknown(self):
+        result = diagnose([], state(5), NOW)
+        self.assertIsNone(result["queue_delay_coverage_pct"])
+        self.assertIsNone(result["recent_dispatch_sample_pct"])
+
+    def test_missing_and_invalid_queue_timestamps_separated(self):
+        invalid = run(5)
+        invalid["run_started_at"] = (NOW - dt.timedelta(minutes=10)).isoformat()
+        result = diagnose([invalid, run(20)], state(5), NOW)
+        self.assertEqual(result["queue_delay_missing_count"], 1)
+        self.assertEqual(result["invalid_queue_timestamp_count"], 1)
+        self.assertEqual(result["queue_delay_sample_count"], 0)
+
 if __name__ == "__main__":
     unittest.main()
