@@ -922,3 +922,26 @@ test("Retry-After above retry budget never retries REST state",async()=>{
   assert.equal(out.report.status,"OK");
   assert.equal(stateCalls,1,"Retry-After 3600s must not trigger another REST request");
 });
+
+// Fifty deterministic variations: exercise distinct rate-limit reset durations,
+// not fifty identical invocations. Each must avoid an early REST retry.
+test("50 distinct long reset windows never cause early REST retry",async()=>{
+  for(let cycle=1;cycle<=50;cycle++){
+    let stateCalls=0;
+    const fake=async url=>{
+      if(String(url).includes("/contents/")){
+        stateCalls++;
+        return new Response("rate limited",{status:403,headers:{
+          "x-ratelimit-remaining":"0",
+          "x-ratelimit-reset":String(Math.floor(Date.now()/1000)+60+cycle*60)
+        }});
+      }
+      if(String(url).startsWith("https://raw.githubusercontent.com/"))
+        return new Response(JSON.stringify(state()),{status:200});
+      return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+    };
+    const out=await runCheck({},NOW,fake);
+    assert.equal(out.report.status,"OK",`cycle ${cycle}: raw fallback should work`);
+    assert.equal(stateCalls,1,`cycle ${cycle}: must not retry before reset`);
+  }
+});
