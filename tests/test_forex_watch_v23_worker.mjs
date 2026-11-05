@@ -833,3 +833,157 @@ for(let caseNo=50;caseNo<100;caseNo++){
     assert.ok(seen.every(x=>!x.url.includes(secret)));
   });
 }
+
+// GitHub may omit rate-limit headers while returning this documented error body.
+test("403 API rate limit exceeded body is classified as rate limit",async()=>{
+  const fetcher=async()=>new Response(JSON.stringify({message:"API rate limit exceeded for this IP"}),{status:403});
+  const out=await runCheck({},NOW,fetcher);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_HTTP_403_RATE_LIMIT"));
+});
+
+// Regression: reject a GitHub payload advertising excessive size without reading its body.
+test("oversized GitHub response is rejected before body read",async()=>{
+  let bodyRead=false;
+  const fake=async()=>({ok:true,status:200,
+    headers:{get:(name)=>name==="content-length"?"3000000":null},
+    text:async()=>{bodyRead=true;throw Error("body must not be read");}
+  });
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_RESPONSE_TOO_LARGE"));
+  assert.equal(bodyRead,false);
+});
+
+test("chunked oversized GitHub JSON without content-length is bounded per endpoint",async()=>{
+  // readPublic() queries state and workflow runs concurrently. Bound each HTTP
+  // response independently instead of summing reads from two separate streams.
+  const streams=[];
+  const fake=async url=>{
+    const stream={url:String(url),reads:0,cancelled:false};
+    streams.push(stream);
+    return {ok:true,status:200,headers:{get:()=>null},body:{
+      getReader:()=>({read:async()=>{stream.reads++;return {done:false,value:new Uint8Array(700000)};},
+        cancel:async()=>{stream.cancelled=true;}})
+    }};
+  };
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_RESPONSE_TOO_LARGE"));
+  assert.equal(streams.length,2,"state and workflow runs must both be queried");
+  assert.ok(streams.every(s=>s.cancelled),"both oversized response streams must be cancelled");
+  assert.ok(streams.every(s=>s.reads===3),
+    "each response must stop after three 700k chunks exceed its 2MB limit");
+});
+
+test("raw fallback rejects oversized streamed JSON without Content-Length",async()=>{
+  let rawCancelled=false,rawReads=0;
+  const fake=async url=>{
+    const u=String(url);
+    if(u.includes("/contents/"))return new Response("forbidden",{status:403});
+    if(u.includes("/actions/"))return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+    return {ok:true,status:200,headers:{get:()=>null},body:{getReader:()=>({
+      read:async()=>{rawReads++;return {done:false,value:new Uint8Array(700000)};},
+      cancel:async()=>{rawCancelled=true;}
+    })}};
+  };
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("GITHUB_STATE_RESPONSE_TOO_LARGE"));
+  assert.equal(rawCancelled,true);
+  assert.ok(rawReads<=3);
+});
+
+test("rate limit reset beyond retry budget never retries REST state",async()=>{
+  let stateCalls=0;
+  const fake=async url=>{
+    if(String(url).includes("/contents/")){
+      stateCalls++;
+      return new Response("rate limited",{status:403,headers:{
+        "x-ratelimit-remaining":"0",
+        "x-ratelimit-reset":String(Math.floor(Date.now()/1000)+3600)
+      }});
+    }
+    if(String(url).startsWith("https://raw.githubusercontent.com/"))
+      return new Response(JSON.stringify(state()),{status:200});
+    return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+  };
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"OK");
+  assert.equal(stateCalls,1,"must not retry before GitHub rate-limit reset");
+});
+
+test("Retry-After above retry budget never retries REST state",async()=>{
+  let stateCalls=0;
+  const fake=async url=>{
+    if(String(url).includes("/contents/")){
+      stateCalls++;
+      return new Response("secondary limit",{status:403,headers:{
+        "retry-after":"3600"
+      }});
+    }
+    if(String(url).startsWith("https://raw.githubusercontent.com/"))
+      return new Response(JSON.stringify(state()),{status:200});
+    return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+  };
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"OK");
+  assert.equal(stateCalls,1,"Retry-After 3600s must not trigger another REST request");
+});
+
+// Fifty deterministic variations: exercise distinct rate-limit reset durations,
+// not fifty identical invocations. Each must avoid an early REST retry.
+test("50 distinct long reset windows never cause early REST retry",async()=>{
+  for(let cycle=1;cycle<=50;cycle++){
+    let stateCalls=0;
+    const fake=async url=>{
+      if(String(url).includes("/contents/")){
+        stateCalls++;
+        return new Response("rate limited",{status:403,headers:{
+          "x-ratelimit-remaining":"0",
+          "x-ratelimit-reset":String(Math.floor(Date.now()/1000)+60+cycle*60)
+        }});
+      }
+      if(String(url).startsWith("https://raw.githubusercontent.com/"))
+        return new Response(JSON.stringify(state()),{status:200});
+      return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+    };
+    const out=await runCheck({},NOW,fake);
+    assert.equal(out.report.status,"OK",`cycle ${cycle}: raw fallback should work`);
+    assert.equal(stateCalls,1,`cycle ${cycle}: must not retry before reset`);
+  }
+});
+
+test("malformed Retry-After does not cause an early REST retry",async()=>{
+  let stateCalls=0;
+  const fake=async url=>{
+    if(String(url).includes("/contents/")){
+      stateCalls++;
+      return new Response("rate limited",{status:429,headers:{"retry-after":"not-a-date"}});
+    }
+    if(String(url).startsWith("https://raw.githubusercontent.com/"))
+      return new Response(JSON.stringify(state()),{status:200});
+    return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+  };
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"OK");
+  assert.equal(stateCalls,1,"invalid cooldown must not lead to aggressive retry");
+});
+
+test("HTTP-date Retry-After above retry budget never retries REST",async()=>{
+  let stateCalls=0;
+  const fake=async url=>{
+    if(String(url).includes("/contents/")){
+      stateCalls++;
+      return new Response("slow down",{status:429,headers:{
+        "retry-after":new Date(Date.now()+3600000).toUTCString()
+      }});
+    }
+    if(String(url).startsWith("https://raw.githubusercontent.com/"))
+      return new Response(JSON.stringify(state()),{status:200});
+    return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+  };
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"OK");
+  assert.equal(stateCalls,1,"HTTP-date cooldown must prevent early REST retry");
+});

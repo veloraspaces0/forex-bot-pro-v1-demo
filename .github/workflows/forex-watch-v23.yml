@@ -11,6 +11,7 @@ on:
       - fix/forex-watch-v231-github-diagnostics-20261104
       - fix/forex-watch-v232-github-403-diagnostics
       - fix/forex-watch-v233-resilience
+      - fix/forex-watch-v24-403-hardening-50cycles
     paths:
       - 'experimentos/forex_watch_v23.py'
       - 'experimentos/forex_watch_v23_worker.mjs'
@@ -22,14 +23,14 @@ on:
       - '.github/workflows/forex-watch-v23.yml'
 permissions:
   contents: read
-# Cancel outdated EXPERIMENTAL runs only; never share the V2.1 paper bot's lock.
+# Keep only the newest EXPERIMENTAL audit for this branch; never share the V2.1 paper bot's lock.
 concurrency:
   group: forex-watch-experimental-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -42,6 +43,43 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_forex_watch_v23.py' -v
       - name: Cloudflare Worker V2.3 offline tests
         run: node --test tests/test_forex_watch_v23_worker.mjs
+      - name: Repeat HTTP 403 adversarial regression 50 times (offline)
+        run: |
+          mkdir -p audit-results
+          : > audit-results/50-cycle-results.txt
+          failures=0
+          for i in $(seq 1 50); do
+            echo "HTTP 403 regression cycle $i/50"
+            if timeout --signal=TERM --kill-after=5s 90s node --test --test-name-pattern='HTTP 403 adversarial matrix|HTTP 403/429 fault injection|403 API rate limit exceeded body|oversized GitHub response|chunked oversized GitHub JSON|raw fallback rejects oversized|rate limit reset beyond retry budget|Retry-After above retry budget|50 distinct long reset windows|malformed Retry-After|HTTP-date Retry-After above retry budget' tests/test_forex_watch_v23_worker.mjs > audit-results/cycle-$i.log 2>&1; then
+              passed=$(sed -n 's/^# pass \([0-9][0-9]*\)$/\1/p' audit-results/cycle-$i.log | tail -1)
+              skipped=$(sed -n 's/^# skipped \([0-9][0-9]*\)$/\1/p' audit-results/cycle-$i.log | tail -1)
+              failed=$(sed -n 's/^# fail \([0-9][0-9]*\)$/\1/p' audit-results/cycle-$i.log | tail -1)
+              if [ -z "$passed" ] || [ "$passed" -ne 109 ] || [ "${failed:-0}" -ne 0 ]; then
+                echo "FAIL cycle $i/50: expected exactly 109 passed, got ${passed:-0}, failures ${failed:-0}" | tee -a audit-results/50-cycle-results.txt
+                cat audit-results/cycle-$i.log
+                failures=$((failures + 1))
+              else
+                echo "PASS cycle $i/50 ($passed tests)" | tee -a audit-results/50-cycle-results.txt
+              fi
+            else
+              echo "FAIL cycle $i/50" | tee -a audit-results/50-cycle-results.txt
+              cat audit-results/cycle-$i.log
+              failures=$((failures + 1))
+            fi
+          done
+          if [ "$failures" -ne 0 ]; then
+            echo "FAIL: $failures of 50 cycles failed" | tee -a audit-results/50-cycle-results.txt
+            exit 1
+          fi
+          echo "PASS: all 50 offline HTTP 403 regression cycles completed" | tee -a audit-results/50-cycle-results.txt
+      - name: Preserve 50-cycle audit evidence (even on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forex-watch-50-cycle-evidence
+          path: audit-results/
+          if-no-files-found: warn
+          retention-days: 14
       - name: Cloudflare Wrangler v4 bundle validation (DRY RUN — no deploy)
         run: npx --yes wrangler@4.157.0 deploy --dry-run --config experimentos/wrangler_v23.toml
       - name: Validate Windows PowerShell deployment helper syntax (never execute)

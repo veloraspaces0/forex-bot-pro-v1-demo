@@ -201,8 +201,29 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
       if(token) headers.Authorization="Bearer "+token;
       const response=await fetcher(url,{headers,cache:"no-store",signal:controller.signal});
       if(response.ok){
-        const body=await response.text();
-        if(body.length>MAX_API_BYTES) throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
+        const contentLength=Number(response.headers?.get?.("content-length"));
+        if(Number.isFinite(contentLength) && contentLength>MAX_API_BYTES)
+          throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
+        let body;
+        if(response.body?.getReader){
+          const reader=response.body.getReader();
+          const chunks=[]; let size=0;
+          try {
+            while(true){
+              const {done,value}=await reader.read();
+              if(done) break;
+              size+=value.byteLength;
+              if(size>MAX_API_BYTES) throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
+              chunks.push(value);
+            }
+          } finally {await reader.cancel().catch(()=>{});}
+          const all=new Uint8Array(size);let offset=0;
+          for(const chunk of chunks){all.set(chunk,offset);offset+=chunk.byteLength;}
+          body=new TextDecoder().decode(all);
+        } else {
+          body=await response.text();
+          if(body.length>MAX_API_BYTES) throw new Error("GITHUB_"+resource+"_RESPONSE_TOO_LARGE");
+        }
         try{return JSON.parse(body);}
         catch {throw new Error("GITHUB_"+resource+"_INVALID_JSON");}
       }
@@ -212,9 +233,26 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
       // Read at most 2048 bytes for classification. Never log or forward the body.
       let hint="";
       if(response.status===403){
-        try {hint=(await response.text()).slice(0,2048).toLowerCase();} catch {}
+        try {
+          // Read at most 2048 bytes, rather than downloading an unbounded error body.
+          if(response.body?.getReader){
+            const reader=response.body.getReader();
+            const chunks=[]; let bytes=0;
+            try {
+              while(bytes<2048){
+                const {done,value}=await reader.read();
+                if(done) break;
+                const chunk=value.subarray(0,2048-bytes);
+                chunks.push(chunk); bytes+=chunk.length;
+              }
+            } finally {await reader.cancel().catch(()=>{});}
+            const combined=new Uint8Array(bytes);let offset=0;
+            for(const chunk of chunks){combined.set(chunk,offset);offset+=chunk.length;}
+            hint=new TextDecoder().decode(combined).toLowerCase();
+          } else hint=(await response.text()).slice(0,2048).toLowerCase();
+        } catch {}
       }
-      const secondary=/secondary rate limit|abuse detection|secondary-rate-limit/.test(hint);
+      const secondary=/secondary rate limit|abuse detection|secondary-rate-limit|api rate limit exceeded|rate limit exceeded/.test(hint);
       const limited=(response.status===403 || response.status===429) &&
         (remaining==="0" || retryAfter!==null && retryAfter!==undefined || secondary || response.status===429);
       const code="GITHUB_"+resource+"_HTTP_"+response.status+
@@ -227,11 +265,11 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
         const seconds=Number(retryAfter);
         const date=Date.parse(retryAfter);
         const wait=Number.isFinite(seconds)?seconds*1000:Number.isFinite(date)?date-Date.now():NaN;
-        if(!Number.isFinite(wait) || wait>10000) throw new Error(code);
+        if(!Number.isFinite(wait) || wait>10000) throw Object.assign(new Error(code),{retryBudgetExceeded:true});
         retryDelay=Math.max(retryDelay,Math.max(0,wait));
       } else if(remaining==="0" && reset!==null && reset!==undefined){
         const wait=Number(reset)*1000-Date.now();
-        if(!Number.isFinite(wait) || wait>10000) throw new Error(code);
+        if(!Number.isFinite(wait) || wait>10000) throw Object.assign(new Error(code),{retryBudgetExceeded:true});
         retryDelay=Math.max(retryDelay,Math.max(0,wait));
       }
       await pause(retryDelay);
@@ -240,7 +278,7 @@ async function getJson(url, fetcher=fetch, pause=(ms)=>new Promise(resolve=>setT
       const msg=String(error?.message||"");
       const code=error?.name==="AbortError"?"GITHUB_"+resource+"_TIMEOUT":
         /^GITHUB_/.test(msg)?msg:"GITHUB_"+resource+"_NETWORK_ERROR";
-      if(n===FETCH_ATTEMPTS-1 || /HTTP_(401|404)|HTTP_403(?!_RATE_LIMIT)|INVALID_JSON|RESPONSE_TOO_LARGE/.test(code))
+      if(error?.retryBudgetExceeded || n===FETCH_ATTEMPTS-1 || /HTTP_(401|404)|HTTP_403(?!_RATE_LIMIT)|INVALID_JSON|RESPONSE_TOO_LARGE/.test(code))
         throw new Error(code);
       await pause(retryDelay);
     } finally {clearTimeout(timer);}
@@ -267,7 +305,25 @@ export async function readPublic(now=Date.now(), fetcher=fetch, token=null) {
             "User-Agent":"Forex-Watch-V2.3.3"},cache:"no-store",redirect:"error",
             signal:fallbackController.signal});
           if(!response.ok) throw error; // preserve the REST diagnostic
-          body=await response.text();
+          const length=Number(response.headers?.get?.("content-length"));
+          if(Number.isFinite(length)&&length>MAX_API_BYTES)
+            throw new Error("GITHUB_STATE_RESPONSE_TOO_LARGE");
+          if(response.body?.getReader){
+            const reader=response.body.getReader();
+            const chunks=[];let size=0;
+            try {
+              while(true){
+                const {done,value}=await reader.read();
+                if(done) break;
+                size+=value.byteLength;
+                if(size>MAX_API_BYTES) throw new Error("GITHUB_STATE_RESPONSE_TOO_LARGE");
+                chunks.push(value);
+              }
+            } finally {await reader.cancel().catch(()=>{});}
+            const all=new Uint8Array(size);let offset=0;
+            for(const chunk of chunks){all.set(chunk,offset);offset+=chunk.byteLength;}
+            body=new TextDecoder().decode(all);
+          } else body=await response.text();
         } catch(fallbackError) {
           if(fallbackError?.name==="AbortError")
             throw new Error("GITHUB_STATE_RAW_TIMEOUT");
