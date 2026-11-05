@@ -725,6 +725,47 @@ test("partial GitHub failure remains INDETERMINADO (no false healthy claim)",asy
   assert.ok(codes(out.report).includes("GITHUB_RUNS_HTTP_403"));
 });
 
+test("Actions 403 preserves validated state but NEVER claims bot health",async()=>{
+  const fake=async url=>String(url).includes("/actions/")
+    ?new Response("denied",{status:403})
+    :new Response(JSON.stringify({encoding:"base64",
+      content:Buffer.from(JSON.stringify(state())).toString("base64")}),{status:200});
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.equal(out.report.source,"PUBLIC_STATE_ONLY_RUNS_UNAVAILABLE");
+  assert.equal(out.report.balance,99.5);
+  assert.equal(out.report.openPosition,false);
+  assert.equal(out.report.checkedAt,stamp(4));
+  assert.ok(codes(out.report).includes("GITHUB_RUNS_HTTP_403"));
+  assert.ok(!codes(out.report).includes("NO_BOT_RUNS"),
+    "unknown runs is not proof that none exist");
+});
+
+test("Actions 403 with invalid state never exposes unvalidated telemetry",async()=>{
+  const malformed=state(4,20,false,NOW,{mode:"LIVE",balance:5});
+  const fake=async url=>String(url).includes("/actions/")
+    ?new Response("denied",{status:403})
+    :new Response(JSON.stringify({encoding:"base64",
+      content:Buffer.from(JSON.stringify(malformed)).toString("base64")}),{status:200});
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.equal(out.report.balance,null);
+  assert.equal(out.report.checkedAt,null);
+});
+
+test("Actions outage retains candle and risk warnings without claiming OK",async()=>{
+  const stale=state(4,120,true,NOW,{risk_violations:1});
+  const fake=async url=>String(url).includes("/actions/")
+    ?new Response("denied",{status:403})
+    :new Response(JSON.stringify({encoding:"base64",
+      content:Buffer.from(JSON.stringify(stale)).toString("base64")}),{status:200});
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.equal(out.report.openPosition,true);
+  assert.ok(codes(out.report).includes("POSITION_CANDLE_STALE"));
+  assert.ok(codes(out.report).includes("RISK_VIOLATIONS"));
+});
+
 test("state REST 403 falls back to public raw JSON without token leakage",async()=>{
   const seen=[];
   const fake=async (url,options={})=>{
