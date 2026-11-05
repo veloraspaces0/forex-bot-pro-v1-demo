@@ -24,6 +24,19 @@ class RiskExperiments(unittest.TestCase):
         self.assertTrue(exposure_allowed(None))
         self.assertFalse(exposure_allowed({"side":"BUY"}))
         with self.assertRaises(ValueError): exposure_allowed(None,2)
+    def test_malformed_candles_and_nonfinite_inputs(self):
+        p={"side":"BUY","entry":1.1,"stop":1.09}
+        for candle in ({"high":1.1,"low":1.2,"close":1.15},
+                       {"high":1.2,"low":1.0,"close":float("nan")},
+                       {"high":1.2,"low":1.0,"close":1.3}):
+            with self.subTest(candle=candle), self.assertRaises(ValueError):
+                trailing_stop(p,candle,0.005)
+        with self.assertRaises(ValueError): trailing_stop(p,{"high":1.2,"low":1.0,"close":1.1},float("inf"))
+        with self.assertRaises(ValueError): trailing_stop(p,{"high":1.2,"low":1.0,"close":1.1},float("nan"))
+        with self.assertRaises(ValueError): adaptive_risk_fraction([],base=float("nan"))
+        with self.assertRaises(ValueError): adaptive_risk_fraction([],floor=float("inf"))
+        with self.assertRaises(ValueError): adaptive_risk_fraction([{"pnl":"bad"}])
+        with self.assertRaises(ValueError): exposure_allowed(None,True)
     def test_fail_closed_invalid_parameters(self):
         with self.assertRaises(ValueError): adaptive_risk_fraction([{"pnl":float("nan")}])
         with self.assertRaises(ValueError): adaptive_risk_fraction([],base=0.01)
