@@ -855,17 +855,25 @@ test("oversized GitHub response is rejected before body read",async()=>{
   assert.equal(bodyRead,false);
 });
 
-test("chunked oversized GitHub JSON without content-length is bounded",async()=>{
-  let cancelled=false,reads=0;
-  const fake=async()=>({ok:true,status:200,headers:{get:()=>null},body:{
-    getReader:()=>({read:async()=>{reads++;return {done:false,value:new Uint8Array(700000)};},
-      cancel:async()=>{cancelled=true;}})
-  }});
+test("chunked oversized GitHub JSON without content-length is bounded per endpoint",async()=>{
+  // readPublic() queries state and workflow runs concurrently. Bound each HTTP
+  // response independently instead of summing reads from two separate streams.
+  const streams=[];
+  const fake=async url=>{
+    const stream={url:String(url),reads:0,cancelled:false};
+    streams.push(stream);
+    return {ok:true,status:200,headers:{get:()=>null},body:{
+      getReader:()=>({read:async()=>{stream.reads++;return {done:false,value:new Uint8Array(700000)};},
+        cancel:async()=>{stream.cancelled=true;}})
+    }};
+  };
   const out=await runCheck({},NOW,fake);
   assert.equal(out.report.status,"INDETERMINADO");
   assert.ok(codes(out.report).includes("GITHUB_STATE_RESPONSE_TOO_LARGE"));
-  assert.equal(cancelled,true);
-  assert.ok(reads<=3,"stream must stop before unbounded reads");
+  assert.equal(streams.length,2,"state and workflow runs must both be queried");
+  assert.ok(streams.every(s=>s.cancelled),"both oversized response streams must be cancelled");
+  assert.ok(streams.every(s=>s.reads===3),
+    "each response must stop after three 700k chunks exceed its 2MB limit");
 });
 
 test("raw fallback rejects oversized streamed JSON without Content-Length",async()=>{
