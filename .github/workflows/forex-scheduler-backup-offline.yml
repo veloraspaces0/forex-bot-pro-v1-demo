@@ -6,8 +6,12 @@ on:
       - feat/forex-v21-cloudflare-scheduler-backup-staging
     paths:
       - 'experimentos/forex_schedule_backup_worker.mjs'
+      - 'experimentos/forex_schedule_backup_entry.mjs'
+      - 'experimentos/forex_backup_guard_do.mjs'
+      - 'experimentos/forex_backup_guard_sql.mjs'
       - 'experimentos/wrangler_backup.toml'
       - 'tests/test_forex_schedule_backup_worker.mjs'
+      - 'tests/test_forex_backup_guard_sql.py'
       - '.github/workflows/forex-scheduler-backup-offline.yml'
 permissions:
   contents: read
@@ -22,6 +26,8 @@ jobs:
           node-version: '22'
       - name: Safety and failure injection tests (offline only)
         run: node --test tests/test_forex_schedule_backup_worker.mjs
+      - name: Real SQLite atomic reservation and contention regression (offline)
+        run: python tests/test_forex_backup_guard_sql.py -v
       - name: Bundling validation without deployment
         run: npx --yes wrangler@4.157.0 deploy --dry-run --config experimentos/wrangler_backup.toml
       - name: Static guards
@@ -33,6 +39,10 @@ jobs:
           assert '/v2/state.enc' not in s, 'No encrypted state access allowed'
           assert 'FOREX_BOT_LIVE' not in s and 'brokerage.example.com' not in s
           assert 'workflow_dispatch' in s
+          assert 'BACKUP_DISPATCH_GUARD' in s
+          assert 'BACKUP_DISPATCH_KV' not in s, 'No non-atomic KV lock permitted'
+          assert 'new_sqlite_classes = ["BackupDispatchGuard"]' in config
+          assert 'BACKUP_DISPATCH_GUARD' in config
           assert 'BACKUP_SCHEDULER_MODE = "observe"' in config
           assert 'forex-v2.yml' in s and 'main' in s
           print('Safe opt-in static checks passed; NO deployment and NO workflow dispatch performed.')
