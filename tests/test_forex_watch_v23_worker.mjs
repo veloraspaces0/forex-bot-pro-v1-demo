@@ -767,6 +767,42 @@ test("Actions outage retains candle and risk warnings without claiming OK",async
   assert.ok(codes(out.report).includes("RISK_VIOLATIONS"));
 });
 
+test("Actions 403 with fresh state never invents cadence or missing-runs alerts",async()=>{
+  const fake=async url=>String(url).includes("/actions/")
+    ? new Response("denied",{status:403})
+    : new Response(JSON.stringify({encoding:"base64",
+        content:Buffer.from(JSON.stringify(state())).toString("base64")}),{status:200});
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  for(const code of ["NO_BOT_RUNS","INSUFFICIENT_SCHEDULE_HISTORY","CADENCE_DELAY","SCHEDULE_DELAY"]){
+    assert.ok(!codes(out.report).includes(code),"No proof of cadence from missing runs: "+code);
+  }
+});
+
+test("Telegram exposes validated risk and candle issues despite unknown GitHub runs",async()=>{
+  const stale=state(4,60,true,NOW,{risk_violations:1});
+  const github=async url=>String(url).includes("/actions/")
+    ?new Response("denied",{status:403})
+    :new Response(JSON.stringify({encoding:"base64",
+      content:Buffer.from(JSON.stringify(stale)).toString("base64")}),{status:200});
+  const out=await runCheck({},NOW,github);
+  assert.equal(out.report.status,"INDETERMINADO");
+  const store=memoryKV(),env=activeEnv(store);
+  const received=[];
+  const notify=async (_url,options)=>{
+    received.push(JSON.parse(options.body).text);
+    return new Response('{"ok":true}',{status:200});
+  };
+  assert.equal((await deliver(out.report,env,NOW,notify)).notified,true);
+  assert.equal(received.length,1);
+  assert.match(received[0],/situação do bot NÃO confirmada/);
+  assert.match(received[0],/GITHUB_RUNS_HTTP_403/);
+  assert.match(received[0],/último estado público/i);
+  assert.match(received[0],/POSITION_CANDLE_STALE/);
+  assert.match(received[0],/RISK_VIOLATIONS/);
+  assert.ok(!received[0].includes("NO_BOT_RUNS"));
+});
+
 test("state REST 403 falls back to public raw JSON without token leakage",async()=>{
   const seen=[];
   const fake=async (url,options={})=>{
