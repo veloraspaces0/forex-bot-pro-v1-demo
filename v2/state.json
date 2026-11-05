@@ -5,25 +5,25 @@
   "pair": "EUR/USD",
   "interval": "15min",
   "initial_balance": 100,
-  "balance": 99.5,
-  "estimated_equity": 99.1,
-  "pnl_total": -0.9,
-  "closed_trades": 1,
+  "balance": 99.0,
+  "estimated_equity": 99.0,
+  "pnl_total": -1.0,
+  "closed_trades": 2,
   "wins": 0,
-  "losses": 1,
+  "losses": 2,
   "win_rate_pct": 0.0,
-  "max_closed_drawdown_pct": 0.5,
+  "max_closed_drawdown_pct": 1.0,
   "max_risk_pct": 0.5,
   "daily_loss_limit_pct": 2,
-  "risk_violations": 0,
+  "risk_violations": 1,
   "gap_halt": false,
-  "open_position": true,
-  "position_side": "SELL",
-  "status": "market_closed_or_stale",
-  "message": "2 candles novos processados; simulação.",
-  "updated_at": "2026-11-05T01:00:34Z",
-  "last_checked_at": "2026-11-05T01:00:34Z",
-  "last_candle_at": "2026-11-05T00:30:00Z",
+  "open_position": false,
+  "position_side": null,
+  "status": "monitoring",
+  "message": "5 candles novos processados; simulação.",
+  "updated_at": "2026-11-05T02:11:04Z",
+  "last_checked_at": "2026-11-05T02:11:04Z",
+  "last_candle_at": "2026-11-05T01:45:00Z",
   "equity_curve": [
     {
       "n": 0,
@@ -32,9 +32,21 @@
     {
       "n": 1,
       "balance": 99.5
+    },
+    {
+      "n": 2,
+      "balance": 99.0
     }
   ],
   "closed_results": [
+    {
+      "at": "2026-11-05T01:00:00Z",
+      "side": "SELL",
+      "pnl": -0.5,
+      "reason": "STOP",
+      "planned_risk_usd": 0.4965,
+      "risk_exceeded": true
+    },
     {
       "at": "2026-11-04T07:30:00Z",
       "side": "SELL",
@@ -45,6 +57,14 @@
     }
   ],
   "events": [
+    {
+      "at": "2026-11-05T01:00:00Z",
+      "message": "SELL closed STOP P/L -0.50"
+    },
+    {
+      "at": "2026-11-05T01:00:00Z",
+      "message": "RISK_EXCEEDED: modeled loss above planned risk"
+    },
     {
       "at": "2026-11-04T15:39:44Z",
       "message": "SELL simulated 382 EUR, approx risk $0.50"
