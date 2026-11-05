@@ -754,7 +754,8 @@ test("Actions 403 with invalid state never exposes unvalidated telemetry",async(
 });
 
 test("Actions outage retains candle and risk warnings without claiming OK",async()=>{
-  const stale=state(4,120,true,NOW,{risk_violations:1});
+  // 60 min triggers POSITION_CANDLE_STALE; over 75 min triggers CANDLE_STALE.
+  const stale=state(4,60,true,NOW,{risk_violations:1});
   const fake=async url=>String(url).includes("/actions/")
     ?new Response("denied",{status:403})
     :new Response(JSON.stringify({encoding:"base64",
