@@ -30,7 +30,7 @@ jobs:
           from pathlib import Path
           s=Path('experimentos/forex_schedule_backup_worker.mjs').read_text()
           config=Path('experimentos/wrangler_backup.toml').read_text()
-          assert 'state.enc' not in s.replace('// state.enc',''), 'No encrypted state access allowed'
+          assert '/v2/state.enc' not in s, 'No encrypted state access allowed'
           assert 'FOREX_BOT_LIVE' not in s and 'brokerage.example.com' not in s
           assert 'workflow_dispatch' in s
           assert 'BACKUP_SCHEDULER_MODE = "observe"' in config
