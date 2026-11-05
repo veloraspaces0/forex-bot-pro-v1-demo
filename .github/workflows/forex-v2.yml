@@ -27,19 +27,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      # Scheduled paper runs bypass the full offline suite to reduce cadence delay.
-      # Push and manual runs retain the full verification gate.
+      # Keep the full safety suite as a gate for every run, including schedule.
       - name: Dependency for encrypted-state tests
-        if: github.event_name != 'schedule'
         run: python -m pip install 'cryptography>=43,<49'
       - name: Paper engine and hardening tests (offline)
-        if: github.event_name != 'schedule'
         run: python -m unittest discover -s tests -v
-      - name: Scheduled run fast syntax gate (no secrets, no trades)
-        if: github.event_name == 'schedule'
-        run: python -m py_compile v2/paper_bot.py v2/runner.py v2/recover_gap.py
-      - name: Scheduled verification timing (diagnostic only)
-        if: github.event_name == 'schedule'
+      - name: Verification timing (diagnostic only)
         run: echo "VERIFY_END_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   paper:
