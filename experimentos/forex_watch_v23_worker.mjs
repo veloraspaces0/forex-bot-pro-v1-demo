@@ -338,9 +338,10 @@ export async function readPublic(now=Date.now(), fetcher=fetch, token=null) {
     })(),
     getJson(ENDPOINT+"/actions/workflows/"+MONITOR_WORKFLOW+"/runs?branch=main&per_page=20",fetcher,undefined,token),
   ]);
-  const failed=results.find(x=>x.status==="rejected");
-  if(failed) throw failed.reason;
-  const [raw,data]=results.map(x=>x.value);
+  // Keep independently validated state telemetry when only the Actions API
+  // fails. Never interpret an unavailable run history as a healthy schedule.
+  if(results[0].status==="rejected") throw results[0].reason;
+  const raw=results[0].value;
   if (!((raw.encoding === "base64" && typeof raw.content === "string") ||
         (raw.encoding === "raw_json" && raw.content && typeof raw.content === "object")))
     throw new Error("GitHub state file format invalid");
@@ -356,6 +357,20 @@ export async function readPublic(now=Date.now(), fetcher=fetch, token=null) {
   } catch(error) {
     throw new Error("STATE_BASE64_OR_JSON_INVALID");
   }
+  if(results[1].status==="rejected"){
+    // assess() checks state identity, accounting consistency, position/candle
+    // freshness and risk flags. Empty runs cannot establish workflow health.
+    const partial=assess(state,[],now);
+    const original=String(results[1].reason?.message||"");
+    const code=/^GITHUB_RUNS_(HTTP_[0-9]{3}(?:_RATE_LIMIT|_POSSIBLE_PERMISSION)?|RESPONSE_TOO_LARGE|INVALID_JSON|TIMEOUT|NETWORK_ERROR)$/.test(original)
+      ? original:"GITHUB_RUNS_UNAVAILABLE";
+    return {...partial,status:"INDETERMINADO",source:"PUBLIC_STATE_ONLY_RUNS_UNAVAILABLE",
+      lastRunId:null,scheduleGapsMin:[],
+      issues:[{severity:"INDETERMINADO",code,
+        message:"Estado público disponível, mas não foi possível verificar execuções do GitHub."},
+        ...partial.issues.filter(i=>!["NO_BOT_RUNS","INSUFFICIENT_SCHEDULE_HISTORY"].includes(i.code))]};
+  }
+  const data=results[1].value;
   if (!Array.isArray(data.workflow_runs)) throw new Error("Missing GitHub workflow_runs");
   return assess(state,data.workflow_runs,now);
 }
@@ -375,9 +390,11 @@ function alertText(report) {
     ? "Falha de consulta ao GitHub; situação do bot NÃO confirmada.\nMotivo: "+
       String(report.issues?.[0]?.code||"MONITOR_UNAVAILABLE")
     : report.issues.map(x=>x.code + ": " + x.message).join("\n");
+  const partialLabel=report.status==="INDETERMINADO" && report.checkedAt
+    ?" (último estado público)":"";
   return ["Forex Watch V2.3 — "+report.status,event,
-    "Posição paper: "+String(report.openPosition??"desconhecida"),
-    "Saldo virtual: "+String(report.balance??"não disponível"),
+    "Posição paper"+partialLabel+": "+String(report.openPosition??"desconhecida"),
+    "Saldo virtual"+partialLabel+": "+String(report.balance??"não disponível"),
     "Estado verificado: "+String(report.checkedAt??"não disponível"),url].join("\n").slice(0,3600);
 }
 async function sendTelegram(env,message,fetcher=fetch) {
