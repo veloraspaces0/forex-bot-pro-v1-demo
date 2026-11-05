@@ -575,7 +575,11 @@ export async function runCheck(env, now=Date.now(), fetcher=fetch) {
     const rawCode=String(error?.message||"");
     const code=/^(GITHUB_(STATE|RUNS)_(HTTP_[0-9]{3}(?:_RATE_LIMIT|_POSSIBLE_PERMISSION)?|RESPONSE_TOO_LARGE|INVALID_JSON|TIMEOUT|NETWORK_ERROR)|STATE_BASE64_OR_JSON_INVALID)$/.test(rawCode)
       ? rawCode:rawCode==="GitHub state file format invalid"?"STATE_FILE_FORMAT_INVALID":
-        rawCode==="Missing GitHub workflow_runs"?"GITHUB_RUNS_MALFORMED":"MONITOR_UNAVAILABLE";
+        rawCode==="Missing GitHub workflow_runs"?"GITHUB_RUNS_MALFORMED":
+        rawCode==="PUBLIC_STATE_SCHEMA_INVALID"?"PUBLIC_STATE_SCHEMA_INVALID":
+        rawCode==="Bad public JSON"?"PUBLIC_STATE_INVALID":
+        rawCode==="GITHUB_STATE_RAW_TIMEOUT"?"GITHUB_STATE_RAW_TIMEOUT":
+        "MONITOR_UNAVAILABLE";
     // Log only a controlled error code, never an HTTP body or credential.
     console.error("WATCH_GITHUB_READ_FAILED",code);
     report={status:"INDETERMINADO",issues:[{
