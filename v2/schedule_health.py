@@ -11,11 +11,19 @@ def parse_utc(value):
         raise ValueError("timezone required")
     return dt.astimezone(timezone.utc)
 
-def analyze_runs(runs, now, max_state_age_minutes=30):
+def analyze_runs(runs, now, state_checked_at=None, max_state_age_minutes=30):
     """Analyze only main's Forex workflow scheduled runs; never infer dropped slots as facts."""
     now = parse_utc(now) if isinstance(now, str) else now
     if now.tzinfo is None:
         raise ValueError("timezone required")
+    if not isinstance(max_state_age_minutes, (int, float)) or isinstance(max_state_age_minutes, bool) or not 0 < max_state_age_minutes < float('inf'):
+        raise ValueError("invalid state age threshold")
+    state_age = None
+    if state_checked_at is not None:
+        checked = parse_utc(state_checked_at)
+        state_age = round((now - checked).total_seconds()/60, 2)
+        if state_age < 0:
+            raise ValueError("future state timestamp")
     selected = []
     for r in runs:
         if r.get("head_branch") != "main" or r.get("event") != "schedule":
@@ -38,6 +46,8 @@ def analyze_runs(runs, now, max_state_age_minutes=30):
         raise ValueError("negative queue delay")
     return {
         "scheduled_runs_observed": len(selected),
+        "state_age_minutes": state_age,
+        "state_over_threshold": state_age is not None and state_age > max_state_age_minutes,
         "last_scheduled_start_utc": selected[0][0].isoformat() if selected else None,
         "minutes_since_last_scheduled_start": age,
         "intervals_minutes": intervals,
