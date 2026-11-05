@@ -9,10 +9,12 @@ on:
     paths:
       - 'v2/paper_bot.py'
       - 'v2/runner.py'
+      - 'v2/heartbeat.py'
       - 'v2/recover_gap.py'
       - 'tests/test_paper_bot.py'
       - 'tests/test_v21_hardening.py'
       - 'tests/test_v21_consolidation.py'
+      - 'tests/test_v21_heartbeat.py'
       - '.github/workflows/forex-v2.yml'
 
 permissions:
@@ -75,25 +77,12 @@ jobs:
           FOREX_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           python - <<'PY'
-          import json, os, sys
+          import os, sys
           sys.path.insert(0,'v2')
-          from datetime import datetime, timezone
-          from pathlib import Path
           from runner import atomic_write
-          state=json.loads(Path('v2/state.json').read_text(encoding='utf-8'))
-          assert state['mode']=='PAPER_ONLY'
-          assert state['pair']=='EUR/USD'
-          assert isinstance(state.get('last_checked_at'),str)
-          heartbeat={
-              'schema_version':1,
-              'mode':'PAPER_ONLY',
-              'run_id':os.environ['FOREX_RUN_ID'],
-              'run_attempt':int(os.environ['FOREX_RUN_ATTEMPT']),
-              'completed_at':datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z'),
-              'state_last_checked_at':state['last_checked_at'],
-              'status':'SUCCESS',
-          }
-          atomic_write(Path('v2/heartbeat.json'),(json.dumps(heartbeat,indent=2)+'\n').encode('utf-8'))
+          from heartbeat import publish
+          publish('v2/state.json','v2/heartbeat.json',
+                  os.environ['FOREX_RUN_ID'],os.environ['FOREX_RUN_ATTEMPT'],atomic_write)
           PY
       - name: Commit derived dashboard, encrypted state and heartbeat
         run: |
