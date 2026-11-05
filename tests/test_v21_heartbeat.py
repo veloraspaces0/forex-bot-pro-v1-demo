@@ -50,5 +50,34 @@ class HeartbeatTests(unittest.TestCase):
             self.assertEqual(json.loads(source.read_text()), self.state)
 
 
+    def test_publish_then_diagnose_integration_offline(self):
+        from cadence_diagnostics import diagnose
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'state.json'
+            target = Path(tmp) / 'heartbeat.json'
+            state = {'mode': 'PAPER_ONLY', 'pair': 'EUR/USD',
+                     'last_checked_at': '2026-11-04T23:59:06Z',
+                     'last_candle_at': '2026-11-04T23:45:00Z',
+                     'open_position': True}
+            source.write_text(json.dumps(state), encoding='utf-8')
+            heartbeat.publish(source, target, '123', '1',
+                              lambda path, content: path.write_bytes(content))
+            observed = json.loads(target.read_text(encoding='utf-8'))
+            result = diagnose(state, observed, now=datetime.now(timezone.utc))
+            self.assertNotIn('HEARTBEAT_STATE_MISMATCH', result['flags'])
+            self.assertTrue(result['open_position'])
+            self.assertEqual(json.loads(source.read_text()), state)
+
+    def test_publish_does_not_write_when_state_is_invalid(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / 'state.json'
+            target = Path(tmp) / 'heartbeat.json'
+            source.write_text(json.dumps(dict(self.state, mode='LIVE')), encoding='utf-8')
+            with self.assertRaises(ValueError):
+                heartbeat.publish(source, target, '123', '1',
+                                  lambda path, content: path.write_bytes(content))
+            self.assertFalse(target.exists())
+
+
 if __name__ == '__main__':
     unittest.main()
