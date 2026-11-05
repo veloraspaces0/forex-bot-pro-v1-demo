@@ -6,8 +6,8 @@
   "interval": "15min",
   "initial_balance": 100,
   "balance": 99.5,
-  "estimated_equity": 99.6,
-  "pnl_total": -0.4,
+  "estimated_equity": 99.27,
+  "pnl_total": -0.73,
   "closed_trades": 1,
   "wins": 0,
   "losses": 1,
@@ -21,9 +21,9 @@
   "position_side": "SELL",
   "status": "monitoring",
   "message": "2 candles novos processados; simulação.",
-  "updated_at": "2026-11-04T23:59:06Z",
-  "last_checked_at": "2026-11-04T23:59:06Z",
-  "last_candle_at": "2026-11-04T23:30:00Z",
+  "updated_at": "2026-11-05T00:25:03Z",
+  "last_checked_at": "2026-11-05T00:25:03Z",
+  "last_candle_at": "2026-11-05T00:00:00Z",
   "equity_curve": [
     {
       "n": 0,
