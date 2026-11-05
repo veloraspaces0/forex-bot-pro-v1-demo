@@ -1,0 +1,16 @@
+# DISABLED BY DEFAULT — experiment only. Never deploy/activate automatically.
+name = "forex-v21-schedule-backup-staging"
+main = "experimentos/forex_schedule_backup_worker.mjs"
+compatibility_date = "2026-11-04"
+workers_dev = false
+
+[vars]
+BACKUP_SCHEDULER_MODE = "observe"
+
+[triggers]
+crons = ["10,25,40,55 * * * *"]
+
+# Do not uncomment until explicitly reviewed and created separately:
+# [[kv_namespaces]]
+# binding = "BACKUP_DISPATCH_KV"
+# id = "<namespace-id>"
