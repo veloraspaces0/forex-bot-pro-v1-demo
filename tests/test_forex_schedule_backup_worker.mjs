@@ -9,15 +9,23 @@ const HB=(age=40)=>({schema_version:1,mode:"PAPER_ONLY",status:"SUCCESS",
   state_last_checked_at:at(age)});
 const run=(age=45,status="completed")=>({name:"Forex Bot Pro V2 - Paper EURUSD",
   head_branch:"main",created_at:at(age),status,conclusion:"success"});
-const kv=()=>{
-  const db=new Map();
-  return {db,get:async k=>db.get(k)??null,
-    put:async (k,v)=>{db.set(k,v);}};
+const guard=()=>{
+  // All calls from one worker use the same Durable Object identity. This is
+  // a serialized RPC fake, not a replacement for SQLite concurrency tests.
+  let reserved=false;
+  return {getByName:name=>{
+    assert.equal(name,"forex-v21-main");
+    return {reserveDispatch:async()=>{
+      if(reserved)return false;
+      reserved=true;
+      return true;
+    }};
+  }};
 };
 const env=(extra={})=>({
   BACKUP_SCHEDULER_MODE:"active",
   GITHUB_DISPATCH_TOKEN:"OFFLINE_FAKE_ACTIONS_TOKEN",
-  BACKUP_DISPATCH_KV:kv(),...extra
+  BACKUP_DISPATCH_GUARD:guard(),...extra
 });
 function mock(heartbeat=HB(),runs=[run()],status=204){
   const calls=[];
@@ -42,7 +50,7 @@ test("opt-in is mandatory: default/observe sends no requests",async()=>{
   assert.equal((await backupCheck({BACKUP_SCHEDULER_MODE:"observe"},NOW,fetcher)).action,"OBSERVE_ONLY");
   assert.equal(seen,0);
 });
-test("active requires token and isolated KV",async()=>{
+test("active requires token and Durable Object binding",async()=>{
   await assert.rejects(()=>backupCheck({BACKUP_SCHEDULER_MODE:"active"},NOW),/BACKUP_CONFIG_INCOMPLETE/);
 });
 test("fresh PAPER heartbeat skips dispatch even when no extra calls",async()=>{
@@ -74,7 +82,7 @@ test("old heartbeat and old runs dispatch PAPER_ONLY main exactly once",async()=
   assert.equal(m.calls[0].options.headers.Authorization,undefined,
     "raw public heartbeat must not receive the GitHub token");
   const again=await backupCheck(e,NOW+5*60_000,m.fetcher);
-  assert.equal(again.action,"SKIP_COOLDOWN");
+  assert.equal(again.action,"SKIP_ATOMIC_COOLDOWN");
   assert.equal(posts(m.calls).length,1);
 });
 test("empty or unrelated run history never authorizes a dispatch",async()=>{
@@ -96,10 +104,13 @@ test("403 on Actions read fails closed without dispatch",async()=>{
   await assert.rejects(()=>backupCheck(env(),NOW,fetcher),/UPSTREAM_HTTP_403/);
   assert.equal(posted,false);
 });
-test("403/500 on dispatch does not record a fake success",async()=>{
+test("403 on dispatch retains atomic reservation to prevent repeated uncertain side effect",async()=>{
   const e=env(),m=mock(HB(80),[run(90)],403);
   await assert.rejects(()=>backupCheck(e,NOW,m.fetcher),/DISPATCH_HTTP_403/);
-  assert.equal(e.BACKUP_DISPATCH_KV.db.size,0);
+  assert.equal(posts(m.calls).length,1);
+  const retry=await backupCheck(e,NOW+15*60_000,m.fetcher);
+  assert.equal(retry.action,"SKIP_ATOMIC_COOLDOWN");
+  assert.equal(posts(m.calls).length,1);
 });
 test("bad heartbeat identity fails closed",async()=>{
   const m=mock({...HB(90),mode:"LIVE"},[run(90)]);
@@ -113,11 +124,30 @@ test("future or timezone-free heartbeat timestamp fails closed",async()=>{
     assert.equal(posts(m.calls).length,0);
   }
 });
-test("malformed cooldown storage fails closed",async()=>{
-  const e=env(),m=mock(HB(80),[run(90)]);
-  await e.BACKUP_DISPATCH_KV.put("forex-paper-only-backup-last-dispatch-v1","not_timestamp");
-  await assert.rejects(()=>backupCheck(e,NOW,m.fetcher),/COOLDOWN_RECORD_INVALID/);
+test("Durable Object unavailable fails closed",async()=>{
+  const e=env({BACKUP_DISPATCH_GUARD:{
+    getByName:()=>({reserveDispatch:async()=>{throw Error("sqlite unavailable")}})
+  }}),m=mock(HB(80),[run(90)]);
+  await assert.rejects(()=>backupCheck(e,NOW,m.fetcher),/COORDINATOR_UNAVAILABLE/);
   assert.equal(posts(m.calls).length,0);
+});
+
+test("invalid coordinator response fails closed",async()=>{
+  const e=env({BACKUP_DISPATCH_GUARD:{
+    getByName:()=>({reserveDispatch:async()=>null})
+  }}),m=mock(HB(80),[run(90)]);
+  await assert.rejects(()=>backupCheck(e,NOW,m.fetcher),/COORDINATOR_INVALID_RESPONSE/);
+  assert.equal(posts(m.calls).length,0);
+});
+
+test("two concurrent eligible backup ticks allow exactly one dispatch",async()=>{
+  const e=env(),m=mock(HB(80),[run(90)]);
+  const outcomes=await Promise.all([
+    backupCheck(e,NOW,m.fetcher),backupCheck(e,NOW,m.fetcher)
+  ]);
+  assert.deepEqual(outcomes.map(x=>x.action).sort(),
+    ["BACKUP_DISPATCHED","SKIP_ATOMIC_COOLDOWN"].sort());
+  assert.equal(posts(m.calls).length,1);
 });
 test("public fetch handler cannot cause dispatch",async()=>{
   assert.equal((await worker.fetch()).status,404);
