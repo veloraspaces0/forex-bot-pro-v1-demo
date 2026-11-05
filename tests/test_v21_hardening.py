@@ -337,6 +337,21 @@ class EncryptedStateIntegrity(unittest.TestCase):
         self.env.stop()
         self.tmp.cleanup()
 
+    def test_reject_empty_key_material_before_encrypting(self):
+        data=json.dumps(b.initial()).encode('utf-8')
+        with patch.dict(os.environ,{'V2_STATE_ENCRYPTION_KEY':''}):
+            with self.assertRaisesRegex(ValueError,'Missing encrypted-state key material'):
+                runner.encrypt('',data)
+            with self.assertRaisesRegex(ValueError,'Missing encrypted-state key material'):
+                runner.cipher('   ')
+        self.assertFalse(runner.ENC.exists())
+
+    def test_explicit_encryption_secret_remains_backwards_compatible(self):
+        data=json.dumps(b.initial()).encode('utf-8')
+        with patch.dict(os.environ,{'V2_STATE_ENCRYPTION_KEY':'LONG_SECRET_FOR_OFFLINE_TESTS'}):
+            runner.encrypt('',data)
+            self.assertEqual(json.loads(runner.decrypt('')),b.initial())
+
     def test_legacy_encryption_format_roundtrip(self):
         data=json.dumps(b.initial()).encode('utf-8')
         runner.encrypt('API_PRIVATE_KEY',data)
