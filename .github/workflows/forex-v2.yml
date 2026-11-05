@@ -75,10 +75,11 @@ jobs:
           FOREX_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
           python - <<'PY'
-          import json, os
+          import json, os, sys
+          sys.path.insert(0,'v2')
           from datetime import datetime, timezone
           from pathlib import Path
-          from v2.runner import atomic_write
+          from runner import atomic_write
           state=json.loads(Path('v2/state.json').read_text(encoding='utf-8'))
           assert state['mode']=='PAPER_ONLY'
           assert state['pair']=='EUR/USD'
@@ -92,7 +93,7 @@ jobs:
               'state_last_checked_at':state['last_checked_at'],
               'status':'SUCCESS',
           }
-          atomic_write(Path('v2/heartbeat.json'),(json.dumps(heartbeat,indent=2)+'\\n').encode('utf-8'))
+          atomic_write(Path('v2/heartbeat.json'),(json.dumps(heartbeat,indent=2)+'\n').encode('utf-8'))
           PY
       - name: Commit derived dashboard, encrypted state and heartbeat
         run: |
