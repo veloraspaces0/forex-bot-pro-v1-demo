@@ -31,7 +31,7 @@ class HeartbeatTests(unittest.TestCase):
                 heartbeat.build_heartbeat(state, '123', '1')
 
     def test_rejects_bad_run_identifiers(self):
-        for run, attempt in [('oops', '1'), ('123', '0'), ('123', '-1')]:
+        for run, attempt in [('oops', '1'), ('123', '0'), ('123', '-1'), ('１２３', '1'), ('123', '١')]:
             with self.assertRaises(ValueError):
                 heartbeat.build_heartbeat(self.state, run, attempt)
 
