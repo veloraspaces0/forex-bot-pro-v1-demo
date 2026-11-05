@@ -86,8 +86,6 @@ jobs:
           publish('v2/state.json','v2/heartbeat.json',
                   os.environ['FOREX_RUN_ID'],os.environ['FOREX_RUN_ATTEMPT'],atomic_write)
           PY
-      - name: Log read-only cadence diagnostics (informational)
-        run: python v2/cadence_diagnostics.py
       - name: Commit derived dashboard, encrypted state and heartbeat
         run: |
           git add -- v2/state.enc v2/state.json v2/heartbeat.json
@@ -101,3 +99,7 @@ jobs:
           # Fail closed on a concurrent update: never force, never automatically
           # rebase and overwrite newer encrypted state.
           git push
+      - name: Log read-only cadence diagnostics (informational)
+        if: success()
+        continue-on-error: true
+        run: python v2/cadence_diagnostics.py
