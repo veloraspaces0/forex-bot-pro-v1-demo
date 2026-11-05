@@ -12,6 +12,7 @@ on:
       - fix/forex-watch-v232-github-403-diagnostics
       - fix/forex-watch-v233-resilience
       - fix/forex-watch-v24-403-hardening-50cycles
+      - fix/forex-watch-v25-partial-telemetry-20261105
     paths:
       - 'experimentos/forex_watch_v23.py'
       - 'experimentos/forex_watch_v23_worker.mjs'
