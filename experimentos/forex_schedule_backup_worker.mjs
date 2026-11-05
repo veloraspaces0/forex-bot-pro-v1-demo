@@ -23,15 +23,16 @@ function isoAge(value,now) {
   if(!Number.isFinite(t) || t-now>2*60*1000) throw new Error("TIMESTAMP_UNTRUSTED");
   return Math.max(0,now-t);
 }
-async function request(url,token,fetcher,method="GET",body=null){
+async function request(url,token,fetcher,method="GET",body=null,parseJson=false){
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);
   const headers={"Accept":"application/vnd.github+json","User-Agent":"Forex-Paper-Backup-Scheduler"};
   if(token)headers.Authorization="Bearer "+token;
   if(body!==null)headers["Content-Type"]="application/json";
   try {
-    return await fetcher(url,{method,headers,cache:"no-store",signal:controller.signal,
+    const response=await fetcher(url,{method,headers,cache:"no-store",signal:controller.signal,
       ...(body===null?{}:{body:JSON.stringify(body)})});
+    return parseJson?await readJson(response):response;
   } finally { clearTimeout(timer); }
 }
 async function readJson(response){
@@ -68,7 +69,7 @@ export async function backupCheck(env,now=Date.now(),fetcher=fetch) {
   if(!env.GITHUB_DISPATCH_TOKEN || !env.BACKUP_DISPATCH_KV)
     throw new Error("BACKUP_CONFIG_INCOMPLETE");
 
-  const heartbeat=await readJson(await request(RAW_HEARTBEAT,null,fetcher));
+  const heartbeat=await request(RAW_HEARTBEAT,null,fetcher,"GET",null,true);
   if(heartbeat.schema_version!==1 || heartbeat.mode!=="PAPER_ONLY" ||
     heartbeat.status!=="SUCCESS" || !/^\d+$/.test(String(heartbeat.run_id||"")))
     throw new Error("HEARTBEAT_INVALID");
@@ -84,10 +85,11 @@ export async function backupCheck(env,now=Date.now(),fetcher=fetch) {
       throw new Error("COOLDOWN_RECORD_INVALID");
     if(now-last<DISPATCH_COOLDOWN_MS)return {action:"SKIP_COOLDOWN"};
   }
-  const runs=await readJson(await request(RUNS_API,env.GITHUB_DISPATCH_TOKEN,fetcher));
+  const runs=await request(RUNS_API,env.GITHUB_DISPATCH_TOKEN,fetcher,"GET",null,true);
   if(!Array.isArray(runs.workflow_runs))throw new Error("RUNS_RESPONSE_INVALID");
   const main=runs.workflow_runs.filter(run=>
     run?.head_branch==="main" && run?.name==="Forex Bot Pro V2 - Paper EURUSD");
+  if(!main.length) throw new Error("RUNS_HISTORY_INSUFFICIENT");
   // A currently queued/running job is a reason NOT to trigger another one.
   if(main.some(run=>["queued","waiting","in_progress","requested","pending"].includes(run.status)))
     return {action:"SKIP_BOT_ALREADY_RUNNING"};
@@ -111,7 +113,7 @@ export default {
       // Never log secret values, URLs with credentials, or external bodies.
       const message=String(e?.message||"BACKUP_UNKNOWN_ERROR");
       console.error("FOREX_BACKUP_SCHEDULER_ERROR",
-        /^(UPSTREAM_HTTP_\d+|UPSTREAM_RESPONSE_TOO_LARGE|UPSTREAM_INVALID_JSON|HEARTBEAT_INVALID|TIMESTAMP_UNTRUSTED|BACKUP_CONFIG_INCOMPLETE|COOLDOWN_RECORD_INVALID|RUNS_RESPONSE_INVALID|DISPATCH_HTTP_\d+)$/.test(message)
+        /^(UPSTREAM_HTTP_\d+|UPSTREAM_RESPONSE_TOO_LARGE|UPSTREAM_INVALID_JSON|HEARTBEAT_INVALID|TIMESTAMP_UNTRUSTED|BACKUP_CONFIG_INCOMPLETE|COOLDOWN_RECORD_INVALID|RUNS_RESPONSE_INVALID|RUNS_HISTORY_INSUFFICIENT|DISPATCH_HTTP_\d+)$/.test(message)
           ? message:"BACKUP_UNKNOWN_ERROR");
       throw new Error("BACKUP_CYCLE_FAILED");
     }));
