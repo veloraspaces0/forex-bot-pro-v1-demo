@@ -387,8 +387,16 @@ function incidentFingerprint(report) {
 function alertText(report) {
   const url = "https://github.com/" + GITHUB_REPO + "/actions";
   const event = report.status === "INDETERMINADO"
-    ? "Falha de consulta ao GitHub; situação do bot NÃO confirmada.\nMotivo: "+
-      String(report.issues?.[0]?.code||"MONITOR_UNAVAILABLE")
+    ? [
+        "Falha de consulta ao GitHub; situação do bot NÃO confirmada.",
+        "Motivo: "+String(report.issues?.[0]?.code||"MONITOR_UNAVAILABLE"),
+        ...(report.checkedAt
+          ? ["Último estado público disponível (não confirma execução atual).",
+            ...report.issues.slice(1)
+              .filter(x=>x.severity==="CRITICO"||x.severity==="ATENCAO")
+              .map(x=>x.severity+" "+x.code+": "+x.message)]
+          : [])
+      ].join("\n")
     : report.issues.map(x=>x.code + ": " + x.message).join("\n");
   const partialLabel=report.status==="INDETERMINADO" && report.checkedAt
     ?" (último estado público)":"";
