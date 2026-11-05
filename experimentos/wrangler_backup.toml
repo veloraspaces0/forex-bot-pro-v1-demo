@@ -1,6 +1,7 @@
-# DISABLED BY DEFAULT — experiment only. Never deploy/activate automatically.
+# STAGING-ONLY experimental fallback. No real GitHub dispatch unless separately
+# provisioned with a secret AND BACKUP_SCHEDULER_MODE set to "active".
 name = "forex-v21-schedule-backup-staging"
-main = "forex_schedule_backup_worker.mjs"
+main = "forex_schedule_backup_entry.mjs"
 compatibility_date = "2026-11-04"
 workers_dev = false
 
@@ -10,7 +11,10 @@ BACKUP_SCHEDULER_MODE = "observe"
 [triggers]
 crons = ["10,25,40,55 * * * *"]
 
-# Do not uncomment until explicitly reviewed and created separately:
-# [[kv_namespaces]]
-# binding = "BACKUP_DISPATCH_KV"
-# id = "<namespace-id>"
+[[durable_objects.bindings]]
+name = "BACKUP_DISPATCH_GUARD"
+class_name = "BackupDispatchGuard"
+
+[[migrations]]
+tag = "backup-dispatch-sqlite-v1"
+new_sqlite_classes = ["BackupDispatchGuard"]
