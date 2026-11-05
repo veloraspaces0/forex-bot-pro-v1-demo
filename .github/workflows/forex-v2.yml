@@ -9,10 +9,14 @@ on:
     paths:
       - 'v2/paper_bot.py'
       - 'v2/runner.py'
+      - 'v2/heartbeat.py'
+      - 'v2/cadence_diagnostics.py'
       - 'v2/recover_gap.py'
       - 'tests/test_paper_bot.py'
       - 'tests/test_v21_hardening.py'
       - 'tests/test_v21_consolidation.py'
+      - 'tests/test_v21_heartbeat.py'
+      - 'tests/test_v21_cadence_diagnostics.py'
       - '.github/workflows/forex-v2.yml'
 
 permissions:
@@ -69,9 +73,22 @@ jobs:
           assert isinstance(data.get('closed_trades'),int)
           print('Public dashboard validation succeeded')
           PY
-      - name: Commit derived dashboard and encrypted state only
+      - name: Publish sanitized successful-run heartbeat
+        env:
+          FOREX_RUN_ID: ${{ github.run_id }}
+          FOREX_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          git add -- v2/state.enc v2/state.json
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0,'v2')
+          from runner import atomic_write
+          from heartbeat import publish
+          publish('v2/state.json','v2/heartbeat.json',
+                  os.environ['FOREX_RUN_ID'],os.environ['FOREX_RUN_ATTEMPT'],atomic_write)
+          PY
+      - name: Commit derived dashboard, encrypted state and heartbeat
+        run: |
+          git add -- v2/state.enc v2/state.json v2/heartbeat.json
           if git diff --cached --quiet; then
             echo 'No changes to publish'
             exit 0
@@ -82,3 +99,7 @@ jobs:
           # Fail closed on a concurrent update: never force, never automatically
           # rebase and overwrite newer encrypted state.
           git push
+      - name: Log read-only cadence diagnostics (informational)
+        if: success()
+        continue-on-error: true
+        run: python v2/cadence_diagnostics.py
