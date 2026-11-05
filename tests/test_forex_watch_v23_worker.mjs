@@ -1065,3 +1065,26 @@ test("HTTP-date Retry-After above retry budget never retries REST",async()=>{
   assert.equal(out.report.status,"OK");
   assert.equal(stateCalls,1,"HTTP-date cooldown must prevent early REST retry");
 });
+
+test("invalid public state is diagnosed without leaking exception text",async()=>{
+  const fake=async url=>{
+    if(String(url).includes("/contents/"))
+      return new Response(JSON.stringify({encoding:"base64",content:Buffer.from(
+        JSON.stringify(state(4,20,false,NOW,{mode:"LIVE"}))).toString("base64")}),{status:200});
+    return new Response(JSON.stringify({workflow_runs:runs()}),{status:200});
+  };
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("PUBLIC_STATE_SCHEMA_INVALID"));
+  assert.equal(out.report.balance,null);
+  assert.equal(out.report.openPosition,null);
+});
+test("malformed public response is classified without raw error details",async()=>{
+  const fake=async url=>new Response(JSON.stringify(
+    String(url).includes("/contents/")?{encoding:"unknown",content:"SECRET_DO_NOT_ECHO"}:
+      {workflow_runs:runs()}),{status:200});
+  const out=await runCheck({},NOW,fake);
+  assert.equal(out.report.status,"INDETERMINADO");
+  assert.ok(codes(out.report).includes("STATE_FILE_FORMAT_INVALID"));
+  assert.ok(!JSON.stringify(out.report).includes("SECRET_DO_NOT_ECHO"));
+});
