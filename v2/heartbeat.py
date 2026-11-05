@@ -29,5 +29,5 @@ def build_heartbeat(state, run_id, run_attempt, now=None):
 def publish(state_path, output_path, run_id, run_attempt, atomic_write):
     state = json.loads(Path(state_path).read_text(encoding='utf-8'))
     heartbeat = build_heartbeat(state, run_id, run_attempt)
-    atomic_write(Path(output_path), (json.dumps(heartbeat, indent=2) + '\\n').encode('utf-8'))
+    atomic_write(Path(output_path), (json.dumps(heartbeat, indent=2) + '\n').encode('utf-8'))
     return heartbeat
