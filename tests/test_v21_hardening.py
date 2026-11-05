@@ -71,6 +71,46 @@ class PaperIntegrity(unittest.TestCase):
         self.assertEqual(s['status'],'monitoring')
         self.assertIsNone(s['position'])
 
+    def test_sell_position_stale_three_cycles_then_one_closed_bar_exit(self):
+        # Adversarial regression: never use the forming bar's OHLC for a
+        # fictitious stop, and never close the same paper trade twice.
+        data=bars(80)
+        last_open=b.date(data[-1]['time'])
+        s=b.initial()
+        s['last_bar']=data[-2]['time']
+        s['candles']=data[:-1]
+        s['day']=data[-2]['time'][:10]
+        s['position']=dict(side='SELL',entry=1.085,stop=1.086,target=1.083,
+            first_exit_bar=b.stamp(last_open+b.STEP),
+            units=100,planned_risk_usd=.1)
+        initial_position=s['position'].copy()
+        for minutes in (7,22,37):
+            b.process(s,data,last_open+timedelta(minutes=minutes))
+            self.assertEqual(s['position'],initial_position)
+            self.assertEqual(s['trades'],[])
+            self.assertEqual(s['balance'],100)
+            self.assertEqual(s['status'],'market_closed_or_stale')
+        self.assertEqual(s['last_bar'],data[-1]['time'])
+
+        # The first eligible exit bar is evaluated only AFTER it closes
+        # (including CLOSE_GRACE), even when its full OHLC is available.
+        exit_bar=dict(time=b.stamp(last_open+b.STEP),open=1.085,
+            high=1.088,low=1.084,close=1.087)
+        with_next=data+[exit_bar]
+        b.process(s,with_next,last_open+timedelta(minutes=29))
+        self.assertEqual(s['position'],initial_position)
+        self.assertEqual(s['trades'],[])
+
+        after_close=last_open+timedelta(minutes=32)
+        b.process(s,with_next,after_close)
+        self.assertIsNone(s['position'])
+        self.assertEqual(len(s['trades']),1)
+        self.assertEqual(s['trades'][0]['reason'],'STOP')
+        closed_balance=s['balance']
+        b.process(s,with_next,after_close+timedelta(seconds=30))
+        self.assertEqual(len(s['trades']),1)
+        self.assertEqual(s['balance'],closed_balance)
+
     def test_closed_bar_excludes_last_incomplete(self):
         data=bars(80)
         current=b.date(data[-1]['time'])+timedelta(minutes=7)
