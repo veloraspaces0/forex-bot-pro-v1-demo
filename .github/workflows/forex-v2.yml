@@ -35,6 +35,9 @@ jobs:
       - name: Paper engine and hardening tests (offline)
         if: github.event_name != 'schedule'
         run: python -m unittest discover -s tests -v
+      - name: Scheduled run fast syntax gate (no secrets, no trades)
+        if: github.event_name == 'schedule'
+        run: python -m py_compile v2/paper_bot.py v2/runner.py v2/recover_gap.py
 
   paper:
     # Feature branches are TEST-ONLY: never call the live provider and never
