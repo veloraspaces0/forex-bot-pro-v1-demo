@@ -43,6 +43,34 @@ class PaperIntegrity(unittest.TestCase):
         self.assertEqual(len(s['trades']),0)
         self.assertEqual(len(s['events']),events)
 
+    def test_twelve_data_open_timestamp_respects_15min_close_and_90s_grace(self):
+        # 81 synthetic timestamps from Nov 4 04:45 to Nov 5 00:45 UTC.
+        # At 01:00:34 the 00:45 candle closed 34 seconds ago; the
+        # 90-second close grace deliberately excludes it.
+        start=datetime(2026,11,4,4,45,tzinfo=UTC)
+        feed=bars(81,start=start)
+        self.assertEqual(feed[-1]['time'],'2026-11-05T00:45:00Z')
+        early=datetime(2026,11,5,1,0,34,tzinfo=UTC)
+        s=b.process(b.initial(),feed,early)
+        self.assertEqual(s['last_bar'],'2026-11-05T00:30:00Z')
+        self.assertEqual(s['status'],'market_closed_or_stale')
+        self.assertIsNone(s['position'])
+
+        # After the grace period, 00:45 is closed/eligible, but a fresh
+        # quote still requires a distinct current 01:00 opening candle.
+        later=datetime(2026,11,5,1,2,0,tzinfo=UTC)
+        s=b.process(s,feed,later)
+        self.assertEqual(s['last_bar'],'2026-11-05T00:45:00Z')
+        self.assertEqual(s['status'],'market_closed_or_stale')
+        self.assertIsNone(s['position'])
+
+        next_quote=bars(82,start=start)[-1]
+        self.assertEqual(next_quote['time'],'2026-11-05T01:00:00Z')
+        s=b.process(s,feed+[next_quote],later)
+        self.assertEqual(s['last_bar'],'2026-11-05T00:45:00Z')
+        self.assertEqual(s['status'],'monitoring')
+        self.assertIsNone(s['position'])
+
     def test_closed_bar_excludes_last_incomplete(self):
         data=bars(80)
         current=b.date(data[-1]['time'])+timedelta(minutes=7)
