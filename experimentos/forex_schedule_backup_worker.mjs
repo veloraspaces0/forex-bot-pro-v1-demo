@@ -11,10 +11,8 @@ const RUNS_API="https://api.github.com/repos/"+REPO+"/actions/workflows/"+WORKFL
 const DISPATCH_API="https://api.github.com/repos/"+REPO+"/actions/workflows/"+WORKFLOW+"/dispatches";
 const WAIT_FOR_HEARTBEAT_MS=35*60*1000;
 const RECENT_RUN_MS=28*60*1000;
-const DISPATCH_COOLDOWN_MS=40*60*1000;
 const REQUEST_TIMEOUT_MS=8000;
 const MAX_JSON_BYTES=500_000;
-const LAST_DISPATCH_KEY="forex-paper-only-backup-last-dispatch-v1";
 
 function isoAge(value,now) {
   if(typeof value!=="string" || !/(Z|[+-]\d{2}:\d{2})$/i.test(value))
@@ -66,7 +64,7 @@ async function readJson(response){
 export async function backupCheck(env,now=Date.now(),fetcher=fetch) {
   // Intentional opt-in. No token or KV read, no GitHub call, no dispatch.
   if(env.BACKUP_SCHEDULER_MODE!=="active")return {action:"OBSERVE_ONLY"};
-  if(!env.GITHUB_DISPATCH_TOKEN || !env.BACKUP_DISPATCH_KV)
+  if(!env.GITHUB_DISPATCH_TOKEN || !env.BACKUP_DISPATCH_GUARD)
     throw new Error("BACKUP_CONFIG_INCOMPLETE");
 
   const heartbeat=await request(RAW_HEARTBEAT,null,fetcher,"GET",null,true);
@@ -76,15 +74,9 @@ export async function backupCheck(env,now=Date.now(),fetcher=fetch) {
   const age=isoAge(heartbeat.completed_at,now);
   if(age<=WAIT_FOR_HEARTBEAT_MS) return {action:"SKIP_RECENT_HEARTBEAT"};
 
-  // Fail closed if cooldown persistence is unreadable. KV is best-effort and
-  // not a distributed lock; the GitHub concurrency group is still mandatory.
-  const lastRaw=await env.BACKUP_DISPATCH_KV.get(LAST_DISPATCH_KEY);
-  if(lastRaw!==null && lastRaw!==undefined){
-    const last=Number(lastRaw);
-    if(!Number.isFinite(last) || last<0 || last>now+120000)
-      throw new Error("COOLDOWN_RECORD_INVALID");
-    if(now-last<DISPATCH_COOLDOWN_MS)return {action:"SKIP_COOLDOWN"};
-  }
+  // The independent Durable Object reserves atomically AFTER the read-only
+  // eligibility checks and BEFORE any non-idempotent GitHub dispatch.
+  // Never release the reservation after an ambiguous upstream failure.
   const runs=await request(RUNS_API,env.GITHUB_DISPATCH_TOKEN,fetcher,"GET",null,true);
   if(!Array.isArray(runs.workflow_runs))throw new Error("RUNS_RESPONSE_INVALID");
   const main=runs.workflow_runs.filter(run=>
@@ -97,12 +89,19 @@ export async function backupCheck(env,now=Date.now(),fetcher=fetch) {
   // publish the heartbeat before we create another workflow run.
   if(main.some(run=>isoAge(run.created_at,now)<=RECENT_RUN_MS))
     return {action:"SKIP_RECENT_GITHUB_RUN"};
+  // Only one backup invocation per 40-minute window may cross this point.
+  // This does not control GitHub's separate native schedule; keep the fixed
+  // PAPER job concurrency group and last_bar-based idempotency on main.
+  let granted;
+  try {
+    const gate=env.BACKUP_DISPATCH_GUARD.getByName("forex-v21-main");
+    granted=await gate.reserveDispatch();
+  } catch {throw new Error("COORDINATOR_UNAVAILABLE");}
+  if(typeof granted!=="boolean")throw new Error("COORDINATOR_INVALID_RESPONSE");
+  if(!granted)return {action:"SKIP_ATOMIC_COOLDOWN"};
   const result=await request(DISPATCH_API,env.GITHUB_DISPATCH_TOKEN,fetcher,
     "POST",{ref:"main"});
   if(result.status!==204)throw new Error("DISPATCH_HTTP_"+result.status);
-  // Record AFTER GitHub acknowledges. If KV fails, a future check must still
-  // inspect GitHub runs before trying to dispatch again.
-  await env.BACKUP_DISPATCH_KV.put(LAST_DISPATCH_KEY,String(now),{expirationTtl:3600});
   return {action:"BACKUP_DISPATCHED",workflow:WORKFLOW,ref:"main"};
 }
 export default {
@@ -113,7 +112,7 @@ export default {
       // Never log secret values, URLs with credentials, or external bodies.
       const message=String(e?.message||"BACKUP_UNKNOWN_ERROR");
       console.error("FOREX_BACKUP_SCHEDULER_ERROR",
-        /^(UPSTREAM_HTTP_\d+|UPSTREAM_RESPONSE_TOO_LARGE|UPSTREAM_INVALID_JSON|HEARTBEAT_INVALID|TIMESTAMP_UNTRUSTED|BACKUP_CONFIG_INCOMPLETE|COOLDOWN_RECORD_INVALID|RUNS_RESPONSE_INVALID|RUNS_HISTORY_INSUFFICIENT|DISPATCH_HTTP_\d+)$/.test(message)
+        /^(UPSTREAM_HTTP_\d+|UPSTREAM_RESPONSE_TOO_LARGE|UPSTREAM_INVALID_JSON|HEARTBEAT_INVALID|TIMESTAMP_UNTRUSTED|BACKUP_CONFIG_INCOMPLETE|COORDINATOR_UNAVAILABLE|COORDINATOR_INVALID_RESPONSE|RUNS_RESPONSE_INVALID|RUNS_HISTORY_INSUFFICIENT|DISPATCH_HTTP_\d+)$/.test(message)
           ? message:"BACKUP_UNKNOWN_ERROR");
       throw new Error("BACKUP_CYCLE_FAILED");
     }));
