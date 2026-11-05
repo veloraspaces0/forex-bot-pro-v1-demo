@@ -1,0 +1,120 @@
+/**
+ * Optional isolated Cloudflare backup for GitHub's best-effort Forex PAPER cron.
+ * SAFETY: no deployment or activation from this repository. Disabled by default.
+ * Only workflow_dispatch on the fixed PAPER_ONLY workflow/ref is allowed.
+ * Never touches brokerage APIs, state.enc, GitHub contents or the Forex Watch.
+ */
+const REPO="veloraspaces0/forex-bot-pro-v1-demo";
+const WORKFLOW="forex-v2.yml";
+const RAW_HEARTBEAT="https://raw.githubusercontent.com/"+REPO+"/main/v2/heartbeat.json";
+const RUNS_API="https://api.github.com/repos/"+REPO+"/actions/workflows/"+WORKFLOW+"/runs?branch=main&per_page=10";
+const DISPATCH_API="https://api.github.com/repos/"+REPO+"/actions/workflows/"+WORKFLOW+"/dispatches";
+const WAIT_FOR_HEARTBEAT_MS=35*60*1000;
+const RECENT_RUN_MS=28*60*1000;
+const DISPATCH_COOLDOWN_MS=40*60*1000;
+const REQUEST_TIMEOUT_MS=8000;
+const MAX_JSON_BYTES=500_000;
+const LAST_DISPATCH_KEY="forex-paper-only-backup-last-dispatch-v1";
+
+function isoAge(value,now) {
+  if(typeof value!=="string" || !/(Z|[+-]\d{2}:\d{2})$/i.test(value))
+    throw new Error("TIMESTAMP_UNTRUSTED");
+  const t=Date.parse(value);
+  if(!Number.isFinite(t) || t-now>2*60*1000) throw new Error("TIMESTAMP_UNTRUSTED");
+  return Math.max(0,now-t);
+}
+async function request(url,token,fetcher,method="GET",body=null){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),REQUEST_TIMEOUT_MS);
+  const headers={"Accept":"application/vnd.github+json","User-Agent":"Forex-Paper-Backup-Scheduler"};
+  if(token)headers.Authorization="Bearer "+token;
+  if(body!==null)headers["Content-Type"]="application/json";
+  try {
+    return await fetcher(url,{method,headers,cache:"no-store",signal:controller.signal,
+      ...(body===null?{}:{body:JSON.stringify(body)})});
+  } finally { clearTimeout(timer); }
+}
+async function readJson(response){
+  if(!response.ok) throw new Error("UPSTREAM_HTTP_"+response.status);
+  const len=response.headers?.get?.("content-length");
+  if(len!==null && len!==undefined && Number(len)>MAX_JSON_BYTES)
+    throw new Error("UPSTREAM_RESPONSE_TOO_LARGE");
+  let value;
+  if(response.body?.getReader) {
+    const reader=response.body.getReader(),chunks=[];
+    let size=0;
+    try {
+      while(true){
+        const part=await reader.read();
+        if(part.done)break;
+        size+=part.value.byteLength;
+        if(size>MAX_JSON_BYTES) throw new Error("UPSTREAM_RESPONSE_TOO_LARGE");
+        chunks.push(part.value);
+      }
+    } finally { await reader.cancel().catch(()=>{}); }
+    const bytes=new Uint8Array(size);let index=0;
+    for(const chunk of chunks){bytes.set(chunk,index);index+=chunk.length;}
+    value=new TextDecoder().decode(bytes);
+  } else {
+    value=await response.text();
+    if(value.length>MAX_JSON_BYTES)throw new Error("UPSTREAM_RESPONSE_TOO_LARGE");
+  }
+  try {return JSON.parse(value);}
+  catch { throw new Error("UPSTREAM_INVALID_JSON"); }
+}
+export async function backupCheck(env,now=Date.now(),fetcher=fetch) {
+  // Intentional opt-in. No token or KV read, no GitHub call, no dispatch.
+  if(env.BACKUP_SCHEDULER_MODE!=="active")return {action:"OBSERVE_ONLY"};
+  if(!env.GITHUB_DISPATCH_TOKEN || !env.BACKUP_DISPATCH_KV)
+    throw new Error("BACKUP_CONFIG_INCOMPLETE");
+
+  const heartbeat=await readJson(await request(RAW_HEARTBEAT,null,fetcher));
+  if(heartbeat.schema_version!==1 || heartbeat.mode!=="PAPER_ONLY" ||
+    heartbeat.status!=="SUCCESS" || !/^\d+$/.test(String(heartbeat.run_id||"")))
+    throw new Error("HEARTBEAT_INVALID");
+  const age=isoAge(heartbeat.completed_at,now);
+  if(age<=WAIT_FOR_HEARTBEAT_MS) return {action:"SKIP_RECENT_HEARTBEAT"};
+
+  // Fail closed if cooldown persistence is unreadable. KV is best-effort and
+  // not a distributed lock; the GitHub concurrency group is still mandatory.
+  const lastRaw=await env.BACKUP_DISPATCH_KV.get(LAST_DISPATCH_KEY);
+  if(lastRaw!==null && lastRaw!==undefined){
+    const last=Number(lastRaw);
+    if(!Number.isFinite(last) || last<0 || last>now+120000)
+      throw new Error("COOLDOWN_RECORD_INVALID");
+    if(now-last<DISPATCH_COOLDOWN_MS)return {action:"SKIP_COOLDOWN"};
+  }
+  const runs=await readJson(await request(RUNS_API,env.GITHUB_DISPATCH_TOKEN,fetcher));
+  if(!Array.isArray(runs.workflow_runs))throw new Error("RUNS_RESPONSE_INVALID");
+  const main=runs.workflow_runs.filter(run=>
+    run?.head_branch==="main" && run?.name==="Forex Bot Pro V2 - Paper EURUSD");
+  // A currently queued/running job is a reason NOT to trigger another one.
+  if(main.some(run=>["queued","waiting","in_progress","requested","pending"].includes(run.status)))
+    return {action:"SKIP_BOT_ALREADY_RUNNING"};
+  // A recently scheduled/successful/failed run should get its own chance to
+  // publish the heartbeat before we create another workflow run.
+  if(main.some(run=>isoAge(run.created_at,now)<=RECENT_RUN_MS))
+    return {action:"SKIP_RECENT_GITHUB_RUN"};
+  const result=await request(DISPATCH_API,env.GITHUB_DISPATCH_TOKEN,fetcher,
+    "POST",{ref:"main"});
+  if(result.status!==204)throw new Error("DISPATCH_HTTP_"+result.status);
+  // Record AFTER GitHub acknowledges. If KV fails, a future check must still
+  // inspect GitHub runs before trying to dispatch again.
+  await env.BACKUP_DISPATCH_KV.put(LAST_DISPATCH_KEY,String(now),{expirationTtl:3600});
+  return {action:"BACKUP_DISPATCHED",workflow:WORKFLOW,ref:"main"};
+}
+export default {
+  async scheduled(_controller,env,ctx) {
+    ctx.waitUntil(backupCheck(env,Date.now()).then(r=>{
+      console.log("FOREX_BACKUP_SCHEDULER",r.action);
+    }).catch(e=>{
+      // Never log secret values, URLs with credentials, or external bodies.
+      const message=String(e?.message||"BACKUP_UNKNOWN_ERROR");
+      console.error("FOREX_BACKUP_SCHEDULER_ERROR",
+        /^(UPSTREAM_HTTP_\d+|UPSTREAM_RESPONSE_TOO_LARGE|UPSTREAM_INVALID_JSON|HEARTBEAT_INVALID|TIMESTAMP_UNTRUSTED|BACKUP_CONFIG_INCOMPLETE|COOLDOWN_RECORD_INVALID|RUNS_RESPONSE_INVALID|DISPATCH_HTTP_\d+)$/.test(message)
+          ? message:"BACKUP_UNKNOWN_ERROR");
+      throw new Error("BACKUP_CYCLE_FAILED");
+    }));
+  },
+  async fetch() {return new Response("Not found",{status:404});}
+};
