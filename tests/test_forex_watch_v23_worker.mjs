@@ -261,13 +261,15 @@ test("bad public JSON response yields INDETERMINADO not fake OK",async()=>{
   const out=await runCheck({},NOW,bad);
   assert.equal(out.report.status,"INDETERMINADO");
 });
-test("KV compare-and-set absent: concurrent runs MAY duplicate, not exactly once",async()=>{
+test("KV concurrency regression: two simultaneous alerts reproduce duplicate sends",async()=>{
+  // Both reads occur before either writer can persist the incident fingerprint.
+  // This is a deterministic characterization of the current non-atomic design,
+  // NOT an exactly-once guarantee or an authorization to deploy.
   const store=memoryKV(),env=activeEnv(store);
   let sends=0;
   const sender=async()=>{sends++;return telegramOk()};
   await Promise.all([deliver(critical(),env,NOW,sender),deliver(critical(),env,NOW,sender)]);
-  assert.ok(sends>=1);
-  // KV is eventually consistent; no claim of exactly-once delivery.
+  assert.equal(sends,2,"current KV read-then-send race must be visible in regression");
 });
 
 test("unknown in-progress start cannot be misdiagnosed as a stuck process",()=>{
