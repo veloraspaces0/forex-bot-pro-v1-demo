@@ -10,7 +10,7 @@ def build_heartbeat(state, run_id, run_attempt, now=None):
     checked = state.get('last_checked_at')
     if not isinstance(checked, str) or not checked:
         raise ValueError('Missing last_checked_at')
-    if not str(run_id).isdigit() or not str(run_attempt).isdigit() or int(run_attempt) < 1:
+    if not isinstance(run_id, str) or not run_id.isascii() or not run_id.isdecimal() or not isinstance(run_attempt, str) or not run_attempt.isascii() or not run_attempt.isdecimal() or int(run_attempt) < 1:
         raise ValueError('Invalid workflow run identity')
     instant = now or datetime.now(timezone.utc)
     if instant.tzinfo is None:
