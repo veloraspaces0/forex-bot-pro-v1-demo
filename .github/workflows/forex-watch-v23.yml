@@ -23,10 +23,10 @@ on:
       - '.github/workflows/forex-watch-v23.yml'
 permissions:
   contents: read
-# Cancel outdated EXPERIMENTAL runs only; never share the V2.1 paper bot's lock.
+# Keep only the newest EXPERIMENTAL audit for this branch; never share the V2.1 paper bot's lock.
 concurrency:
   group: forex-watch-experimental-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   verify:
     runs-on: ubuntu-latest
