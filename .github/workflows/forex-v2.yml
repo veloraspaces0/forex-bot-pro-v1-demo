@@ -10,11 +10,13 @@ on:
       - 'v2/paper_bot.py'
       - 'v2/runner.py'
       - 'v2/heartbeat.py'
+      - 'v2/cadence_diagnostics.py'
       - 'v2/recover_gap.py'
       - 'tests/test_paper_bot.py'
       - 'tests/test_v21_hardening.py'
       - 'tests/test_v21_consolidation.py'
       - 'tests/test_v21_heartbeat.py'
+      - 'tests/test_v21_cadence_diagnostics.py'
       - '.github/workflows/forex-v2.yml'
 
 permissions:
