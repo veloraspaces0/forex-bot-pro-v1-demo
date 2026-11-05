@@ -71,6 +71,37 @@ class PaperIntegrity(unittest.TestCase):
         self.assertEqual(s['status'],'monitoring')
         self.assertIsNone(s['position'])
 
+    def test_current_forming_quote_does_not_hide_missing_previous_closed_bar(self):
+        # 00:45 is absent while the 01:00 quote is present at 01:02.
+        # Old >= comparison incorrectly declared this feed fresh and could
+        # enter a new position based on indicators only through 00:30.
+        start=datetime(2026,11,4,4,45,tzinfo=UTC)
+        complete=bars(82,start=start)
+        missing=complete[:-2]   # through 00:30; omit 00:45
+        current=complete[-1]    # 01:00 forming quote
+        self.assertEqual(missing[-1]['time'],'2026-11-05T00:30:00Z')
+        self.assertEqual(current['time'],'2026-11-05T01:00:00Z')
+        now=datetime(2026,11,5,1,2,tzinfo=UTC)
+        s=b.initial()
+        s['last_bar']=missing[-2]['time']
+        s['candles']=missing[:-1]
+        with patch.object(b,'signal',return_value='BUY') as proposed:
+            b.process(s,missing+[current],now)
+        self.assertFalse(proposed.called)
+        self.assertIsNone(s['position'])
+        self.assertFalse(s['gap_halt'])
+        self.assertEqual(s['status'],'market_closed_or_stale')
+        self.assertEqual(s['last_bar'],missing[-1]['time'])
+
+        # Supplying the missing, fully closed 00:45 candle restores a
+        # continuous feed and permits the normal entry rules.
+        with patch.object(b,'signal',return_value='BUY') as proposed:
+            b.process(s,complete,now)
+        self.assertTrue(proposed.called)
+        self.assertEqual(s['status'],'monitoring')
+        self.assertIsNotNone(s['position'])
+        self.assertEqual(s['position']['signal_bar'],'2026-11-05T00:45:00Z')
+
     def test_sell_position_stale_three_cycles_then_one_closed_bar_exit(self):
         # Adversarial regression: never use the forming bar's OHLC for a
         # fictitious stop, and never close the same paper trade twice.
