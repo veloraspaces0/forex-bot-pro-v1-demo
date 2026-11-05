@@ -58,8 +58,9 @@ jobs:
                 echo "FAIL cycle $i/50: expected exactly 109 passed, got ${passed:-0}, failures ${failed:-0}" | tee -a audit-results/50-cycle-results.txt
                 cat audit-results/cycle-$i.log
                 failures=$((failures + 1))
+              else
+                echo "PASS cycle $i/50 ($passed tests)" | tee -a audit-results/50-cycle-results.txt
               fi
-              echo "PASS cycle $i/50 ($passed tests)" | tee -a audit-results/50-cycle-results.txt
             else
               echo "FAIL cycle $i/50" | tee -a audit-results/50-cycle-results.txt
               cat audit-results/cycle-$i.log
