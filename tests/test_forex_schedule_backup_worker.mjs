@@ -77,6 +77,14 @@ test("old heartbeat and old runs dispatch PAPER_ONLY main exactly once",async()=
   assert.equal(again.action,"SKIP_COOLDOWN");
   assert.equal(posts(m.calls).length,1);
 });
+test("empty or unrelated run history never authorizes a dispatch",async()=>{
+  for(const runs of [[],[{...run(90),head_branch:"other"}]]) {
+    const m=mock(HB(80),runs);
+    await assert.rejects(()=>backupCheck(env(),NOW,m.fetcher),/RUNS_HISTORY_INSUFFICIENT/);
+    assert.equal(posts(m.calls).length,0);
+  }
+});
+
 test("403 on Actions read fails closed without dispatch",async()=>{
   let posted=false;
   const fetcher=async url=>{
