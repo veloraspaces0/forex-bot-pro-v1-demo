@@ -19,11 +19,11 @@
   "gap_halt": false,
   "open_position": false,
   "position_side": null,
-  "status": "monitoring",
-  "message": "4 candles novos processados; simulação.",
-  "updated_at": "2026-11-05T06:22:11Z",
-  "last_checked_at": "2026-11-05T06:22:11Z",
-  "last_candle_at": "2026-11-05T06:00:00Z",
+  "status": "market_closed_or_stale",
+  "message": "5 candles novos processados; simulação.",
+  "updated_at": "2026-11-05T07:45:40Z",
+  "last_checked_at": "2026-11-05T07:45:40Z",
+  "last_candle_at": "2026-11-05T07:15:00Z",
   "equity_curve": [
     {
       "n": 0,
