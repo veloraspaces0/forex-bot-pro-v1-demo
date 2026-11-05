@@ -89,7 +89,10 @@ class PaperIntegrity(unittest.TestCase):
             self.assertEqual(s['position'],initial_position)
             self.assertEqual(s['trades'],[])
             self.assertEqual(s['balance'],100)
-            self.assertEqual(s['status'],'market_closed_or_stale')
+            # A forming quote can be current at +7m without being eligible
+            # for a stop/target exit; later the same quote becomes stale.
+            self.assertEqual(s['status'],
+                'monitoring' if minutes==7 else 'market_closed_or_stale')
         self.assertEqual(s['last_bar'],data[-1]['time'])
 
         # The first eligible exit bar is evaluated only AFTER it closes
