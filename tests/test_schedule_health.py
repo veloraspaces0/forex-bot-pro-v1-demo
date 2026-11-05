@@ -24,6 +24,18 @@ class ScheduleHealthTests(unittest.TestCase):
           created="2026-11-05T09:07:00Z")],"2026-11-05T09:15:00Z")
         self.assertFalse(result["schedule_over_30"])
         self.assertEqual(result["queue_delay_minutes"],[0.5])
+    def test_state_age_threshold(self):
+        result=analyze_runs([], "2026-11-05T09:15:00Z",
+          state_checked_at="2026-11-05T08:40:00Z")
+        self.assertEqual(result["state_age_minutes"],35)
+        self.assertTrue(result["state_over_threshold"])
+        self.assertIsNone(result["minutes_since_last_scheduled_start"])
+        with self.assertRaises(ValueError):
+            analyze_runs([], "2026-11-05T09:15:00Z",
+              state_checked_at="2026-11-05T09:20:00Z")
+        with self.assertRaises(ValueError):
+            analyze_runs([], "2026-11-05T09:15:00Z",
+              max_state_age_minutes=float("nan"))
     def test_empty_is_unknown_not_healthy(self):
         result=analyze_runs([],"2026-11-05T09:15:00Z")
         self.assertIsNone(result["minutes_since_last_scheduled_start"])
