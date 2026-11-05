@@ -69,9 +69,34 @@ jobs:
           assert isinstance(data.get('closed_trades'),int)
           print('Public dashboard validation succeeded')
           PY
-      - name: Commit derived dashboard and encrypted state only
+      - name: Publish sanitized successful-run heartbeat
+        env:
+          FOREX_RUN_ID: ${{ github.run_id }}
+          FOREX_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          git add -- v2/state.enc v2/state.json
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          from v2.runner import atomic_write
+          state=json.loads(Path('v2/state.json').read_text(encoding='utf-8'))
+          assert state['mode']=='PAPER_ONLY'
+          assert state['pair']=='EUR/USD'
+          assert isinstance(state.get('last_checked_at'),str)
+          heartbeat={
+              'schema_version':1,
+              'mode':'PAPER_ONLY',
+              'run_id':os.environ['FOREX_RUN_ID'],
+              'run_attempt':int(os.environ['FOREX_RUN_ATTEMPT']),
+              'completed_at':datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z'),
+              'state_last_checked_at':state['last_checked_at'],
+              'status':'SUCCESS',
+          }
+          atomic_write(Path('v2/heartbeat.json'),(json.dumps(heartbeat,indent=2)+'\\n').encode('utf-8'))
+          PY
+      - name: Commit derived dashboard, encrypted state and heartbeat
+        run: |
+          git add -- v2/state.enc v2/state.json v2/heartbeat.json
           if git diff --cached --quiet; then
             echo 'No changes to publish'
             exit 0
