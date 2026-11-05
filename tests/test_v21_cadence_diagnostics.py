@@ -51,5 +51,30 @@ class CadenceDiagnosticsTests(unittest.TestCase):
         self.assertIn("FUTURE_TIMESTAMP", diagnose(self.state, self.heartbeat, self.now)["flags"])
 
 
+    def test_boundary_at_thirty_minutes_is_not_delayed(self):
+        self.state["last_checked_at"] = "2026-11-04T21:00:00Z"
+        self.heartbeat["state_last_checked_at"] = "2026-11-04T21:00:00Z"
+        self.heartbeat["completed_at"] = "2026-11-04T21:00:00Z"
+        flags = diagnose(self.state, self.heartbeat, self.now)["flags"]
+        self.assertNotIn("STATE_UPDATE_DELAY", flags)
+        self.assertNotIn("HEARTBEAT_DELAY", flags)
+
+    def test_reject_timestamp_without_timezone(self):
+        self.state["last_checked_at"] = "2026-11-04T21:15:00"
+        with self.assertRaises(ValueError):
+            diagnose(self.state, self.heartbeat, self.now)
+
+    def test_reject_heartbeat_that_claims_live(self):
+        self.heartbeat["mode"] = "LIVE"
+        with self.assertRaises(ValueError):
+            diagnose(self.state, self.heartbeat, self.now)
+
+    def test_stale_candle_can_coexist_with_recent_state(self):
+        self.state["last_candle_at"] = "2026-11-04T20:00:00Z"
+        flags = diagnose(self.state, self.heartbeat, self.now)["flags"]
+        self.assertIn("CANDLE_AGE_HIGH", flags)
+        self.assertNotIn("STATE_UPDATE_DELAY", flags)
+
+
 if __name__ == "__main__":
     unittest.main()
