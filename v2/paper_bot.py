@@ -260,7 +260,12 @@ def process(s, bars, now):
     current_start = now.replace(minute=now.minute//15*15,second=0,microsecond=0)
     # Estimate a paper fill only from the current (possibly still-forming) bar,
     # never from a previous candle falsely interpreted as a live quote.
-    fresh = date(quoted['time']) == current_start and date(quoted['time']) >= date(last['time'])+STEP
+    # A current forming quote is not enough: the immediately preceding 15m
+    # candle must also be fully closed (including CLOSE_GRACE). Otherwise a
+    # missing intermediate bar could be mistaken for fresh market data and
+    # permit an entry on stale indicators.
+    fresh = (date(quoted['time']) == current_start and
+             date(last['time'])+STEP == current_start)
     s['last_checked_at'] = stamp(now)
     s['last_quote'] = quoted['close']
     s['quote_at'] = quoted['time']
