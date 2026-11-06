@@ -1,0 +1,58 @@
+name: Forex V2.1.1 Read-only Live Diagnostic
+on:
+  push:
+    branches:
+      - fix/v211-scheduler-reliability-diagnostics
+    paths:
+      - 'experimentos/forex_v211_schedule_diagnostics.py'
+      - '.github/workflows/forex-v211-live-diagnostics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-live-readonly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Query actual scheduled workflow history and public PAPER state
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python experimentos/forex_v211_schedule_diagnostics.py > /tmp/forex-v211-live-diagnostic.json
+          python - <<'PY'
+          import json
+          with open('/tmp/forex-v211-live-diagnostic.json', encoding='utf-8') as f:
+              r=json.load(f)
+          print(json.dumps({
+              'checked_at_utc':r.get('checked_at_utc'),
+              'operational_health':r.get('operational_health'),
+              'required_evidence_complete':r.get('required_evidence_complete'),
+              'scheduled_runs':r.get('scheduled_runs'),
+              'recent_scheduled_runs':r.get('recent_scheduled_runs'),
+              'historical_scheduled_runs':r.get('historical_scheduled_runs'),
+              'max_queue_delay_minutes':r.get('max_queue_delay_minutes'),
+              'queue_delay_sample_count':r.get('queue_delay_sample_count'),
+              'queue_delay_missing_count':r.get('queue_delay_missing_count'),
+              'invalid_queue_timestamp_count':r.get('invalid_queue_timestamp_count'),
+              'queue_delay_coverage_pct':r.get('queue_delay_coverage_pct'),
+              'recent_schedule_gaps':r.get('recent_schedule_gaps'),
+              'cron_slot_evidence':r.get('cron_slot_evidence'),
+              'max_dispatch_offset_minutes':r.get('max_dispatch_offset_minutes'),
+              'max_recent_dispatch_offset_minutes':r.get('max_recent_dispatch_offset_minutes'),
+              'last_run_age_minutes':r.get('last_run_age_minutes'),
+              'last_success_age_minutes':r.get('last_success_age_minutes'),
+              'state_age_minutes':r.get('state_age_minutes'),
+              'anomaly_types':sorted({x['type'] for x in r['anomalies']}),
+              'anomaly_count':len(r['anomalies']),
+              'historical_anomaly_count':len(r.get('historical_anomalies', [])),
+              'historical_anomaly_types':sorted({x['type'] for x in r.get('historical_anomalies', [])}),
+              'diagnostic_note':r.get('diagnostic_note'),
+          },indent=2))
+          PY
