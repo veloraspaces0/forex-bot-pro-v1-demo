@@ -19,6 +19,9 @@ HEADER = b'FX2'
 # remain decryptable. A future key rotation requires an explicit migration.
 def cipher(key_text):
     secret = os.getenv('V2_STATE_ENCRYPTION_KEY','').strip() or key_text
+    # Preserve legacy key derivation, but never derive a public predictable key.
+    if not isinstance(secret, str) or not secret.strip():
+        raise ValueError('Missing encrypted-state key material')
     key = hashlib.pbkdf2_hmac('sha256',secret.encode('utf-8'),b'fxbot-v2-v1',180000,32)
     return AESGCM(key)
 
