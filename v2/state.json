@@ -21,9 +21,9 @@
   "position_side": null,
   "status": "monitoring",
   "message": "3 candles novos processados; simulação.",
-  "updated_at": "2026-11-06T16:36:42Z",
-  "last_checked_at": "2026-11-06T16:36:42Z",
-  "last_candle_at": "2026-11-06T16:15:00Z",
+  "updated_at": "2026-11-06T17:28:55Z",
+  "last_checked_at": "2026-11-06T17:28:55Z",
+  "last_candle_at": "2026-11-06T17:00:00Z",
   "equity_curve": [
     {
       "n": 0,
