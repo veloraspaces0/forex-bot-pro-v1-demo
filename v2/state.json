@@ -6,8 +6,8 @@
   "interval": "15min",
   "initial_balance": 100,
   "balance": 98.02,
-  "estimated_equity": 98.02,
-  "pnl_total": -1.98,
+  "estimated_equity": 97.97,
+  "pnl_total": -2.03,
   "closed_trades": 4,
   "wins": 0,
   "losses": 4,
@@ -17,13 +17,13 @@
   "daily_loss_limit_pct": 2,
   "risk_violations": 3,
   "gap_halt": false,
-  "open_position": false,
-  "position_side": null,
+  "open_position": true,
+  "position_side": "BUY",
   "status": "monitoring",
-  "message": "4 candles novos processados; simulação.",
-  "updated_at": "2026-11-07T08:34:07Z",
-  "last_checked_at": "2026-11-07T08:34:07Z",
-  "last_candle_at": "2026-11-07T08:15:00Z",
+  "message": "3 candles novos processados; simulação.",
+  "updated_at": "2026-11-07T09:24:42Z",
+  "last_checked_at": "2026-11-07T09:24:42Z",
+  "last_candle_at": "2026-11-07T09:00:00Z",
   "equity_curve": [
     {
       "n": 0,
@@ -82,6 +82,10 @@
   ],
   "events": [
     {
+      "at": "2026-11-07T09:24:42Z",
+      "message": "BUY simulated 434 EUR, approx risk $0.49"
+    },
+    {
       "at": "2026-11-06T00:00:00Z",
       "message": "SELL closed STOP P/L -0.49"
     },
@@ -124,10 +128,6 @@
     {
       "at": "2026-11-04T07:11:10Z",
       "message": "SELL simulated 346 EUR, approx risk $0.50"
-    },
-    {
-      "at": "2026-11-04T03:12:55Z",
-      "message": "Initialized indicators; no historical trades."
     }
   ],
   "notice": "Paper estimates only. Gaps and variable costs may exceed planned risk; no real orders."
