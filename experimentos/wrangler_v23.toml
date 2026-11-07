@@ -1,0 +1,26 @@
+# Forex Watch V2.3 EXTERNAL — isolated Cloudflare Worker, no auto-deployment.
+# Run: npx wrangler deploy --config experimentos/wrangler_v23.toml
+name = "forex-watch-v23-paper-monitor"
+main = "./forex_watch_v23_worker.mjs"
+compatibility_date = "2026-11-04"
+workers_dev = false
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+# Explicit safety gate: no Telegram alerts until user changes this locally.
+[vars]
+ALERT_MODE = "observe"
+
+# Optional notifications require a KV binding and Wrangler secrets:
+# [[kv_namespaces]]
+# binding = "INCIDENT_KV"
+# id = "REPLACE_WITH_YOUR_NAMESPACE_ID"
+# npx wrangler secret put TELEGRAM_BOT_TOKEN --config experimentos/wrangler_v23.toml
+# npx wrangler secret put TELEGRAM_CHAT_ID --config experimentos/wrangler_v23.toml
+
+# Independent watchdog for THIS Worker, separate from GitHub/Cloudflare:
+# Create a Healthchecks.io check with a 15-minute expected period, grace e.g. 20 minutes.
+# Keep its UUID ping URL SECRET; configure via Wrangler secret (NEVER commit):
+# npx wrangler secret put MONITOR_HEARTBEAT_URL --config experimentos/wrangler_v23.toml
+# ALERT_MODE remains observe until external services are explicitly configured and tested.

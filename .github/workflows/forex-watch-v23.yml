@@ -1,0 +1,123 @@
+name: Forex Watch V2.3 — tests offline (no trades)
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'experimentos/forex_watch_v23_worker.mjs'
+      - 'tests/test_forex_watch_v23_worker.mjs'
+      - '.github/workflows/forex-watch-v23.yml'
+  push:
+    branches:
+      - experimento-forex-watch-v23-20261104
+      - hardening-forex-watch-v23-20261104
+      - deploy-ready-forex-watch-v23-20261104
+      - revisao-final-forex-watch-v23-20261104
+      - auditoria-adversarial-watch-v23-20261104
+      - fix/forex-watch-v231-github-diagnostics-20261104
+      - fix/forex-watch-v232-github-403-diagnostics
+      - fix/forex-watch-v233-resilience
+      - fix/forex-watch-v24-403-hardening-50cycles
+      - fix/forex-watch-v25-partial-telemetry-20261105
+      - fix/forex-watch-telegram-403-consolidated-20261105
+    paths:
+      - 'experimentos/forex_watch_v23.py'
+      - 'experimentos/forex_watch_v23_worker.mjs'
+      - 'experimentos/wrangler_v23.toml'
+      - 'experimentos/setup_watch_v23.ps1'
+      - 'experimentos/DEPLOY_WATCH_V23.md'
+      - 'tests/test_forex_watch_v23.py'
+      - 'tests/test_forex_watch_v23_worker.mjs'
+      - '.github/workflows/forex-watch-v23.yml'
+permissions:
+  contents: read
+# Keep only the newest EXPERIMENTAL audit for this branch; never share the V2.1 paper bot's lock.
+concurrency:
+  group: forex-watch-experimental-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # 50 offline cycles each permit up to 90s; 25 minutes cannot cover worst case.
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python V2.3 adversarial offline tests
+        run: python -m unittest discover -s tests -p 'test_forex_watch_v23.py' -v
+      - name: Cloudflare Worker V2.3 offline tests
+        run: node --test tests/test_forex_watch_v23_worker.mjs
+      - name: Repeat HTTP 403 adversarial regression 50 times (offline)
+        run: |
+          mkdir -p audit-results
+          : > audit-results/50-cycle-results.txt
+          failures=0
+          for i in $(seq 1 50); do
+            echo "HTTP 403 regression cycle $i/50"
+            if timeout --signal=TERM --kill-after=5s 90s node --test --test-name-pattern='HTTP 403 adversarial matrix|HTTP 403/429 fault injection|403 API rate limit exceeded body|oversized GitHub response|chunked oversized GitHub JSON|raw fallback rejects oversized|rate limit reset beyond retry budget|Retry-After above retry budget|50 distinct long reset windows|malformed Retry-After|HTTP-date Retry-After above retry budget' tests/test_forex_watch_v23_worker.mjs > audit-results/cycle-$i.log 2>&1; then
+              passed=$(sed -n 's/^# pass \([0-9][0-9]*\)$/\1/p' audit-results/cycle-$i.log | tail -1)
+              skipped=$(sed -n 's/^# skipped \([0-9][0-9]*\)$/\1/p' audit-results/cycle-$i.log | tail -1)
+              failed=$(sed -n 's/^# fail \([0-9][0-9]*\)$/\1/p' audit-results/cycle-$i.log | tail -1)
+              if [ -z "$passed" ] || [ "$passed" -lt 1 ] || [ "${failed:-0}" -ne 0 ]; then
+                echo "FAIL cycle $i/50: expected at least 1 passed and 0 failures, got ${passed:-0}, failures ${failed:-0}" | tee -a audit-results/50-cycle-results.txt
+                cat audit-results/cycle-$i.log
+                failures=$((failures + 1))
+              else
+                echo "PASS cycle $i/50 ($passed tests)" | tee -a audit-results/50-cycle-results.txt
+              fi
+            else
+              echo "FAIL cycle $i/50" | tee -a audit-results/50-cycle-results.txt
+              cat audit-results/cycle-$i.log
+              failures=$((failures + 1))
+            fi
+          done
+          if [ "$failures" -ne 0 ]; then
+            echo "FAIL: $failures of 50 cycles failed" | tee -a audit-results/50-cycle-results.txt
+            exit 1
+          fi
+          echo "PASS: all 50 offline HTTP 403 regression cycles completed" | tee -a audit-results/50-cycle-results.txt
+      - name: Preserve 50-cycle audit evidence (even on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: forex-watch-50-cycle-evidence
+          path: audit-results/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Cloudflare Wrangler v4 bundle validation (DRY RUN — no deploy)
+        run: npx --yes wrangler@4.157.0 deploy --dry-run --config experimentos/wrangler_v23.toml
+      - name: Validate Windows PowerShell deployment helper syntax (never execute)
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("experimentos/setup_watch_v23.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) { $errors | Out-Host; exit 1 }
+          Write-Host "PowerShell deployment helper syntax OK (no execution, no deployment)."
+      - name: Static verify only — NEVER run paper trading or read secrets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text=Path('experimentos/forex_watch_v23_worker.mjs').read_text()
+          assert "state.enc" not in text, "Worker must not read encrypted operational state"
+          assert "github.com" in text and "api.github.com" in text, "Public GitHub source required"
+          assert "git push" not in text and "workflow_dispatch" not in text, "No GitHub write/trigger actions"
+          print("Experimental CI: Worker static checks OK; no scheduled deployment.")
+          PY
+
+  windows-preflight:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Execute real PowerShell user preflight (NO login, NO deploy)
+        shell: powershell
+        run: .\\experimentos\\setup_watch_v23.ps1 -PreflightOnly
+
